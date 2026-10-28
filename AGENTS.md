@@ -1,5 +1,7 @@
 # Repository instructions
 
+- Follow the [Make and workflow conventions](docs/development/contributing.md)
+  from workstation-manager and Hoverkraft when changing tooling.
 - This public repository belongs to `neilime` and owns Proxmox, Home Assistant, personal services and family integrations.
 - Keep infrastructure state, credentials, private inventory and user data out of Git.
   Use domain-specific credentials; never share professional and personal identities.
