@@ -1,6 +1,6 @@
 # Documentation
 
-- [Bootstrap Proxmox on the UM690](usage/proxmox-bootstrap.md)
+- [Bootstrap a Proxmox host](usage/proxmox-bootstrap.md)
 - [Validate the repository](usage/validation.md)
 - [Make and workflow conventions](../CONTRIBUTING.md)
 - [Infrastructure boundaries](development/architecture.md)
