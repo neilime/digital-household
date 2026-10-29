@@ -10,7 +10,8 @@ local caches and generated reports excluded there.
 
 `make lint-fix` applies supported automatic fixes. `make lint docs/` limits
 linting to matching paths. Positional filters apply only to lint commands;
-unknown standalone targets fail. `make ci` runs local linting with fixes.
+unknown standalone targets fail. `make ci` runs linting with fixes, installer
+tests, Ansible syntax checks and a baseline test in a disposable container.
 VM integration tests run in CI; see the
 [validation guide](docs/usage/validation.md) for scenarios and reporting.
 
@@ -41,9 +42,16 @@ The four collaboration workflows reuse pinned ci-github-common workflows.
 Renovate uses the repository's built-in `GITHUB_TOKEN`, scoped through job
 permissions. No additional credential is required. Keep the repository
 configuration in `.github/renovate.json`. Dependabot owns Actions and Docker
-updates; Renovate handles Ansible and Terraform dependencies when their manifests
-are present. The bootstrap has no such manifests yet. Schedules become active
-after these workflows reach the default branch.
+and Python requirements updates, including the tooling image; Renovate handles
+the pinned Proxmox assistant Debian package, Ansible collections and Terraform
+dependencies. Docker updates are disabled in Renovate to avoid duplicate ownership.
+
+Review Proxmox installer releases manually against the
+[official download page](https://www.proxmox.com/en/downloads/proxmox-virtual-environment).
+Update the version, URL and SHA-256 together in `proxmox/iso.json`, then prepare
+an ISO with synthetic settings before reviewing the change. Treat changes to the
+Proxmox archive-key checksum as a separate trust review. Keep pins in manifests,
+not copied version numbers in usage guides.
 
 Enable "Allow GitHub Actions to create and approve pull requests" under
 Settings > Actions > General so Renovate can open PRs. GitHub couples creation

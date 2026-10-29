@@ -1,0 +1,23 @@
+# Copy to .local/proxmox/answer.toml; replace every REPLACE value privately.
+# Read docs/usage/proxmox-bootstrap.md before preparing or booting this media.
+[global]
+keyboard = "fr"
+country = "fr"
+fqdn = "REPLACE_WITH_HOST_FQDN"
+mailto = "REPLACE_WITH_ADMIN_EMAIL"
+timezone = "Europe/Paris"
+root-password-hashed = "REPLACE_WITH_PASSWORD_HASH"
+root-ssh-keys = ["REPLACE_WITH_SSH_PUBLIC_KEY"]
+reboot-mode = "power-off"
+
+[network]
+source = "from-answer"
+cidr = "REPLACE_WITH_MANAGEMENT_ADDRESS_AND_PREFIX"
+dns = "REPLACE_WITH_DNS_ADDRESS"
+gateway = "REPLACE_WITH_GATEWAY_ADDRESS"
+filter.ID_NET_NAME_MAC = "REPLACE_WITH_UDEV_ID_NET_NAME_MAC"
+
+[disk-setup]
+filesystem = "ext4"
+filter-match = "all"
+filter.ID_SERIAL = "REPLACE_WITH_EXACT_DISK_ID_SERIAL"

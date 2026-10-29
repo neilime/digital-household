@@ -2,8 +2,20 @@
 
 Static validation requires Docker and GNU Make. `make lint` runs the same pinned
 Hoverkraft linter used in CI, including YAML, workflow, IaC and secret checks.
-Infrastructure-specific format/validate checks will accompany the first real
-OpenTofu stack and Ansible playbook; no empty deployment stack is claimed valid.
+
+`make test` builds the pinned tooling image, tests installer input validation,
+checksum failures and preservation of existing/private files, and checks the
+Ansible playbook syntax. Native answer validation runs against the actual
+Proxmox assistant. `make test-baseline` applies the role as root inside a fresh
+Debian container, checks effective SSH configuration, preserves Debian APT
+sources, verifies both Proxmox channels and checks an unchanged preview.
+These host-changing tests must never run directly on the workstation.
+
+CI runs both commands in its bootstrap job. They do not boot a Proxmox ISO or
+exercise production preflight against a real Proxmox host. For installer changes,
+also prepare an ISO locally using the synthetic answer fixture copied with mode
+600 into `.local/`. Inspect it with the native `inspect-iso` command. Do not use
+that fixture on real hardware, and do not upload prepared ISOs.
 
 VM validation runs on GitHub-hosted Linux runners through
 [the shared CI job](../../.github/workflows/shared-ci.yml). Pull requests and
@@ -33,9 +45,9 @@ those files into the supplied guest `REPORTS_DIR`. The parser consumes the
 `report-files` output when present, otherwise the command-status `report`.
 Collected report contents must be suitable for these public workflows.
 For input options and cleanup recovery, see the generated action documentation:
-[create](https://github.com/hoverkraft-tech/ci-github-iac/blob/82a76b76c04772b7d959948bcb6657c88df182f3/actions/vm/create/README.md),
-[test](https://github.com/hoverkraft-tech/ci-github-iac/blob/82a76b76c04772b7d959948bcb6657c88df182f3/actions/vm/test/README.md) and
-[destroy](https://github.com/hoverkraft-tech/ci-github-iac/blob/82a76b76c04772b7d959948bcb6657c88df182f3/actions/vm/destroy/README.md).
+[create](https://github.com/hoverkraft-tech/ci-github-iac/blob/70843368d5f5f7b0a2cec1e8435d81cc40beee64/actions/vm/create/README.md),
+[test](https://github.com/hoverkraft-tech/ci-github-iac/blob/70843368d5f5f7b0a2cec1e8435d81cc40beee64/actions/vm/test/README.md) and
+[destroy](https://github.com/hoverkraft-tech/ci-github-iac/blob/70843368d5f5f7b0a2cec1e8435d81cc40beee64/actions/vm/destroy/README.md).
 
 `make plan`, `provision`, `configure`, `deploy`, `verify` and `backup` fail with an
 explicit message until their implementations are delivered. These commands never

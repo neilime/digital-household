@@ -18,8 +18,19 @@ branches, with an explicit reviewer gate. No workflow currently deploys or spend
 money. Main-branch protection requires passing checks and a pull-request review.
 A PR author cannot approve their own PR; another eligible reviewer is required.
 
-Dependencies are pinned to immutable Action commits and a Docker digest. Dependabot
-proposes updates. Pin all VM actions to the same shared revision; the Makefile
-derives its local revision from `vm/create`. Workflows compose shared operations
+Dependencies are pinned to immutable Action commits, Docker digests and tooling
+versions. See [update ownership](../../CONTRIBUTING.md#repository-automation).
+Pin all VM actions to the same shared revision. Workflows compose shared operations
 and own cleanup conditions. The test action owns report parsing and publication. Review
 shared CI updates with a complete VM lifecycle before merging.
+
+The native Proxmox installer owns the initial disk layout and host networking.
+The repository wrapper verifies the source image and enforces the private-answer
+and exact-target policy before invoking that installer. Ansible owns the ongoing
+host baseline; it requires a known SSH host key and verifies the target before
+changes. The current baseline manages APT sources and SSH configuration only.
+Private answers, prepared media and inventory stay in ignored `.local/` paths.
+
+OpenTofu will own HAOS VM resources. No VM state backend, HAOS deployment or
+backup implementation is present yet. See the [bootstrap guide](../usage/proxmox-bootstrap.md)
+and [validation scope](../usage/validation.md) for operational boundaries.
