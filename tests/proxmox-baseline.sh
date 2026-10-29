@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# This script is invoked only by make test-baseline inside its disposable container.
+# Local Make checks and the CI test playbook run this only in a disposable container.
 test -f /.dockerenv
 test "$(id -u)" = 0
 mkdir -p /run/sshd

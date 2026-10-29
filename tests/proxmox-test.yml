@@ -1,0 +1,23 @@
+---
+- name: Test Proxmox baseline behavior in a disposable container
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Require the consumer tooling image
+      ansible.builtin.assert:
+        that: lookup('ansible.builtin.env', 'TOOLING_IMAGE') | length > 0
+    - name: Verify baseline changes, SSH hardening and idempotency
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - --platform=linux/amd64
+          - --user=0:0
+          - --volume
+          - "{{ playbook_dir }}/..:/workspace:ro"
+          - "{{ lookup('ansible.builtin.env', 'TOOLING_IMAGE') }}"
+          - bash
+          - tests/proxmox-baseline.sh
+      changed_when: false

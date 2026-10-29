@@ -12,6 +12,9 @@ local caches and generated reports excluded there.
 linting to matching paths. Positional filters apply only to lint commands;
 unknown standalone targets fail. `make ci` runs linting with fixes, installer
 tests, Ansible syntax checks and a baseline test in a disposable container.
+CI executes `tests/proxmox-test.yml` through the shared Ansible test action; the
+playbook reuses the same disposable-container assertions and publishes native
+JUnit reports. Ansible Lint stays in the separate linter job.
 VM integration tests run in CI; see the
 [validation guide](docs/usage/validation.md) for scenarios and reporting.
 
