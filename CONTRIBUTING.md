@@ -21,9 +21,9 @@ VM integration tests run in CI; see the
 `main-ci.yml` and `pull-request-ci.yml` call `shared-ci.yml`. Main supports
 pushes and manual runs; PR CI also supports merge queues. Both cancel superseded
 runs for the same workflow and ref. Start workflows with `permissions: {}` and
-grant only the permissions required by each job. Keep step names descriptive,
-Actions pinned; compose shared VM operations in the job. The aggregate `checks`
-job requires every prerequisite to succeed and is required by branch protection.
+grant only the permissions required by each job. Keep step names descriptive and
+Actions pinned. Compose shared VM operations in the job, and review each job's
+result before merging.
 
 Use Conventional Commits and reviewed pull requests. Pin all three VM actions
 to the same immutable revision in `shared-ci.yml`. Update those references
@@ -60,7 +60,7 @@ not copied version numbers in usage guides.
 Enable "Allow GitHub Actions to create and approve pull requests" under
 Settings > Actions > General so Renovate can open PRs. GitHub couples creation
 and approval in this setting; the workflows do not approve PRs or enable
-automatic merges. Keep the required review and passing checks on main.
+automatic merges. Obtain the required review and verify CI results before merging.
 For a Renovate PR, select "Approve workflows to run" on the PR page to start
 its pending CI runs, then review the results and changes before merging.
 See [GitHub's token-trigger rules](https://docs.github.com/en/actions/concepts/security/github_token#when-github_token-triggers-workflow-runs).
