@@ -23,13 +23,21 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+      pull-requests: write
     steps:
       - name: Checkout consumer
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Validate installer inputs and Ansible syntax
-        run: make test
+      - name: Validate installer inputs
+        run: make test-unit
+      - name: Test Ansible
+        uses: hoverkraft-tech/ci-github-iac/actions/ansible/test@d2673efa2d13247d9a7ccf9fc2b6876fbf2d3435 # feat/ansible-test-action
+        with:
+          container-image: digital-household-tooling:local
+          playbooks: ansible/proxmox.yml
+          inventory: ansible/inventory.example.yml
+          report-name: digital-household - Ansible tests
       - name: Validate baseline changes and idempotency in a disposable container
         run: make test-baseline
   vm:
