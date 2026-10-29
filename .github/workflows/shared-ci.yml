@@ -19,6 +19,8 @@ jobs:
       statuses: write
   bootstrap:
     name: Proxmox bootstrap validation
+    env:
+      TOOLING_IMAGE: digital-household-tooling:local
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -30,17 +32,14 @@ jobs:
         with:
           persist-credentials: false
       - name: Validate installer inputs
-        run: make test-unit
+        run: make test-unit TOOLING_IMAGE="$TOOLING_IMAGE"
       - name: Test Ansible
-        uses: hoverkraft-tech/ci-github-iac/actions/ansible/test@8ed3c99f0b2dba75f9854c2646a7c2b3447c7472 # feat/ansible-test-action
+        uses: hoverkraft-tech/ci-github-iac/actions/ansible/test@00d7ffa3c60b79a58995625223580e4b25a0e3f8 # feat/ansible-test-action
         with:
           ansible-requirements: docker/tooling/requirements.txt
           ansible-config: ansible/ansible.cfg
-          playbooks: ansible/proxmox.yml
-          inventory: ansible/inventory.example.yml
+          test-playbook: tests/proxmox-test.yml
           report-name: digital-household - Ansible tests
-      - name: Validate baseline changes and idempotency in a disposable container
-        run: make test-baseline
   vm:
     runs-on: ubuntu-latest
     timeout-minutes: 90
