@@ -15,13 +15,11 @@ class InstallerTests(unittest.TestCase):
     """Exercise the native answer validator and safe media preparation boundaries."""
 
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        # unittest owns this context until cleanup, including when a test fails.
+        # pylint: disable-next=consider-using-with
+        self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.answer = self.root / "answer.toml"
-        self.valid = (
-            Path(__file__).parent / "fixtures/proxmox-answer.toml"
-        ).read_text()
+        self.valid = (Path(__file__).parent / "fixtures/proxmox-answer.toml").read_text()
         self.answer.write_text(self.valid)
         self.answer.chmod(0o600)
         self.iso = self.root / "source.iso"
@@ -38,9 +36,11 @@ class InstallerTests(unittest.TestCase):
         self.installer = Installer(self.manifest)
 
     def test_exact_private_answer_passes_native_validation(self):
+        """The supported answer schema remains accepted by the native assistant."""
         self.installer.validate_answer(self.answer)
 
     def test_ambiguous_or_unsafe_answers_are_rejected(self):
+        """Reject broad selectors, wrong types and unsupported installation policies."""
         cases = [
             ('"SYNTHETIC_INSTALLATION_DISK"', '"*"'),
             ('"all"', '"any"'),
@@ -65,6 +65,7 @@ class InstallerTests(unittest.TestCase):
                     self.installer.validate_answer(self.answer)
 
     def test_public_answer_and_symlink_are_rejected(self):
+        """Private answer files cannot be public or redirected through a symlink."""
         self.answer.chmod(0o644)
         with self.assertRaises(ValueError):
             self.installer.validate_answer(self.answer)
@@ -75,18 +76,21 @@ class InstallerTests(unittest.TestCase):
             self.installer.validate_answer(link)
 
     def test_malformed_answer_does_not_expose_input_in_error(self):
+        """Syntax errors never echo potentially private answer values."""
         self.answer.write_text('root-password = "PRIVATE_TEST_SENTINEL\n')
         with self.assertRaises(ValueError) as raised:
             self.installer.validate_answer(self.answer)
         self.assertNotIn("PRIVATE_TEST_SENTINEL", str(raised.exception))
 
     def test_checksum_failure_keeps_existing_source(self):
+        """A corrupt existing cache is reported and preserved for inspection."""
         self.iso.write_bytes(b"corrupt")
         with self.assertRaises(ValueError):
             self.installer.download(self.iso)
         self.assertEqual(self.iso.read_bytes(), b"corrupt")
 
     def test_download_verifies_bytes_before_publishing(self):
+        """Only downloads with the reviewed checksum reach the requested path."""
         cached = self.root / "cache/image.iso"
         self.installer.download(cached)
         self.assertEqual(cached.read_bytes(), self.iso.read_bytes())
@@ -97,6 +101,7 @@ class InstallerTests(unittest.TestCase):
         self.assertFalse(rejected.exists())
 
     def test_prepare_refuses_to_replace_existing_output(self):
+        """Preparing media never overwrites an existing output."""
         output = self.root / "existing.iso"
         output.write_bytes(b"keep me")
         with self.assertRaises(ValueError):
@@ -104,11 +109,16 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(output.read_bytes(), b"keep me")
 
     def test_failed_preparation_does_not_publish_partial_media(self):
+        """A native preparation failure removes staging files and publishes nothing."""
         output = self.root / "private/prepared.iso"
-        with patch.object(Installer, "validate_answer"), patch(
-            "scripts.proxmox_installer.subprocess.run",
-            side_effect=subprocess.CalledProcessError(1, ["installer"]),
-        ), self.assertRaises(subprocess.CalledProcessError):
+        with (
+            patch.object(Installer, "validate_answer"),
+            patch(
+                "scripts.proxmox_installer.subprocess.run",
+                side_effect=subprocess.CalledProcessError(1, ["installer"]),
+            ),
+            self.assertRaises(subprocess.CalledProcessError),
+        ):
             self.installer.prepare(self.answer, self.iso, output)
         self.assertFalse(output.exists())
         self.assertEqual(list(output.parent.iterdir()), [])

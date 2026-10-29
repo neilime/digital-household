@@ -1,5 +1,7 @@
 FROM debian:trixie-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 # The Proxmox repository authenticates packages through its signed APT index.
 # hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -26,6 +28,6 @@ ENV PATH="/opt/tooling/venv/bin:${PATH}" \
     ANSIBLE_CONFIG=/workspace/ansible/ansible.cfg \
     ANSIBLE_HOME=/tmp/ansible
 WORKDIR /workspace
-USER tooling
+USER ${UID}:${GID}
 HEALTHCHECK --interval=5m --timeout=10s CMD ["proxmox-auto-install-assistant", "--version"]
 CMD ["bash"]

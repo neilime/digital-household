@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Validate the private installation answer and prepare a verified Proxmox ISO."""
 
 import argparse
@@ -42,9 +41,7 @@ class Installer:
             stderr=subprocess.DEVNULL,
         )
         if result.returncode:
-            raise ValueError(
-                "Proxmox rejected the answer; review its documented fields privately"
-            )
+            raise ValueError("Proxmox rejected the answer; review its documented fields privately")
         Installer.validate_access(config["global"])
         Installer.validate_disk(config["disk-setup"])
         Installer.validate_network(config["network"])
@@ -60,13 +57,9 @@ class Installer:
             raise ValueError("Provide a SHA-512 or yescrypt root password hash only")
         keys = general.get("root-ssh-keys", [])
         if not keys or not all(key.startswith("ssh-ed25519 ") for key in keys):
-            raise ValueError(
-                "Provide an Ed25519 SSH public key for key-only administration"
-            )
+            raise ValueError("Provide an Ed25519 SSH public key for key-only administration")
         if general.get("reboot-mode") != "power-off":
-            raise ValueError(
-                "Installation must power off so installation media can be removed"
-            )
+            raise ValueError("Installation must power off so installation media can be removed")
 
     @staticmethod
     def validate_disk(disk: dict) -> None:
@@ -78,42 +71,29 @@ class Installer:
             or "disk-list" in disk
             or disk.get("filter-match") != "all"
             or set(filters) != {"ID_SERIAL"}
-            or not isinstance(serial, str)
-            or not serial
-            or any(char in serial for char in "*?[]")
         ):
             raise ValueError("Select one ext4 installation disk by its exact ID_SERIAL")
+        if not isinstance(serial, str) or not serial or any(char in serial for char in "*?[]"):
+            raise ValueError("Provide a literal disk ID_SERIAL without glob patterns")
 
     @staticmethod
     def validate_network(network: dict) -> None:
         """Require an exact wired interface and static management addressing."""
         nic = network.get("filter", {})
         if network.get("source") != "from-answer" or set(nic) != {"ID_NET_NAME_MAC"}:
-            raise ValueError(
-                "Use static networking with an exact ID_NET_NAME_MAC filter"
-            )
+            raise ValueError("Use static networking with an exact ID_NET_NAME_MAC filter")
         if not isinstance(nic["ID_NET_NAME_MAC"], str) or not re.fullmatch(
             r"enx[0-9a-f]{12}", nic["ID_NET_NAME_MAC"]
         ):
-            raise ValueError(
-                "ID_NET_NAME_MAC must be enx followed by the twelve MAC hex digits"
-            )
+            raise ValueError("ID_NET_NAME_MAC must be enx followed by the twelve MAC hex digits")
         try:
             address = ipaddress.ip_interface(network["cidr"])
             gateway = ipaddress.ip_address(network["gateway"])
             ipaddress.ip_address(network["dns"])
         except (KeyError, ValueError):
-            raise ValueError(
-                "Provide a valid management CIDR, gateway and DNS address"
-            ) from None
-        if (
-            address.version != 4
-            or gateway not in address.network
-            or gateway == address.ip
-        ):
-            raise ValueError(
-                "Use an IPv4 management address with a separate gateway in its subnet"
-            )
+            raise ValueError("Provide a valid management CIDR, gateway and DNS address") from None
+        if address.version != 4 or gateway not in address.network or gateway == address.ip:
+            raise ValueError("Use an IPv4 management address with a separate gateway in its subnet")
 
     def verify_image(self, iso: Path) -> None:
         """Verify the complete image before using an existing or downloaded file."""
@@ -132,9 +112,7 @@ class Installer:
         iso.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=iso.parent) as temporary:
             downloaded = Path(temporary) / "download.iso"
-            with urlopen(self.image["url"], timeout=60) as source, downloaded.open(
-                "wb"
-            ) as target:
+            with urlopen(self.image["url"], timeout=60) as source, downloaded.open("wb") as target:
                 while chunk := source.read(1024 * 1024):
                     target.write(chunk)
             self.verify_image(downloaded)
@@ -186,9 +164,7 @@ def main() -> None:
         "prepare": ("answer", "iso", "output"),
     }
     if any(getattr(args, key) is None for key in required[args.operation]):
-        parser.error(
-            f"{args.operation} requires: {', '.join(required[args.operation])}"
-        )
+        parser.error(f"{args.operation} requires: {', '.join(required[args.operation])}")
     installer = Installer(Path(__file__).resolve().parents[1] / "proxmox/iso.json")
     try:
         if args.operation == "validate":
@@ -199,10 +175,8 @@ def main() -> None:
             installer.prepare(args.answer, args.iso, args.output)
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         # Native tools can include answer values in diagnostics. Never relay that output.
-        parser.exit(
-            1,
-            f"Installer operation failed: {error if isinstance(error, ValueError) else type(error).__name__}\n",
-        )
+        detail = str(error) if isinstance(error, ValueError) else type(error).__name__
+        parser.exit(1, f"Installer operation failed: {detail}\n")
     print(f"Proxmox installer {args.operation} completed")
 
 
