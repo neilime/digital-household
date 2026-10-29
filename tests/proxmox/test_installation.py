@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import tempfile
 import time
@@ -77,8 +78,8 @@ class ProxmoxGuest:
             "4096",
             "-display",
             "none",
-            "-monitor",
-            "none",
+            "-qmp",
+            f"unix:{self.directory}/qmp.sock,server=on,wait=off",
             "-drive",
             "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd",
             "-drive",
@@ -112,7 +113,10 @@ class ProxmoxGuest:
             stdout=self.log,
             stderr=self.log,
         )
-        assert self.process.wait(timeout=900) == 0, "Installer did not power off successfully"
+        try:
+            assert self.process.wait(timeout=900) == 0, "Installer did not power off successfully"
+        except subprocess.TimeoutExpired as error:
+            raise RuntimeError(f"Installer timed out: {self.diagnose()}") from error
         self.process = subprocess.Popen(
             [*arguments, "-boot", "order=c"],
             stdout=self.log,
@@ -120,6 +124,41 @@ class ProxmoxGuest:
         )
         # Trust on first use is limited to this owned, isolated loopback QEMU endpoint.
         self.wait_for_ssh(first_boot=True)
+
+    @staticmethod
+    def qmp_command(stream, name, arguments=None):
+        """Read a bounded QMP reply while ignoring asynchronous VM events."""
+        payload = {"execute": name, "arguments": arguments or {}}
+        stream.write(json.dumps(payload).encode() + b"\n")
+        for _ in range(20):
+            result = json.loads(stream.readline())
+            if "error" in result:
+                raise RuntimeError("QMP diagnostic command failed")
+            if "return" in result:
+                return result["return"]
+        raise RuntimeError("QMP diagnostic response missing")
+
+    def diagnose(self):
+        """Capture only VM state and the console of this synthetic installation."""
+        diagnostic = {"free_disk_gib": shutil.disk_usage(self.source).free // 2**30}
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+                client.settimeout(5)
+                client.connect(str(self.directory / "qmp.sock"))
+                with client.makefile("rwb", buffering=0) as stream:
+                    json.loads(stream.readline())
+
+                    self.qmp_command(stream, "qmp_capabilities")
+                    diagnostic["state"] = self.qmp_command(stream, "query-status")
+                    blocks = self.qmp_command(stream, "query-block")
+                    diagnostic["disk_io"] = [item.get("io-status") for item in blocks]
+                    output = self.source / "diagnostics"
+                    output.mkdir(mode=0o700, exist_ok=True)
+                    arguments = {"filename": str(output / "installer.png"), "format": "png"}
+                    self.qmp_command(stream, "screendump", arguments)
+        except (OSError, ValueError, RuntimeError) as error:
+            diagnostic["capture_error"] = type(error).__name__
+        return json.dumps(diagnostic)
 
     def wait_for_ssh(self, first_boot=False, previous_boot=None):
         """Require a running QEMU and a new boot ID when verifying a reboot."""

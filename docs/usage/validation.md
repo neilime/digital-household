@@ -55,7 +55,7 @@ trust is restricted to that owned endpoint; later connections enforce the record
 The tests verify:
 
 - Unattended installation powers off and the installed disk boots without the ISO.
-- Proxmox kernel, UEFI boot, localStorage, management services and web UI work.
+- Proxmox kernel, UEFI boot, disk storage, management services and web UI work.
 - The disk serial, static management bridge, route, DNS and hostname match the answer.
 - The actual deployment playbook passes its target checks and applies the baseline.
 - Reapplication and check mode report no changes; Debian package sources are preserved.
@@ -64,8 +64,11 @@ The tests verify:
 Pytest writes native JUnit to `REPORTS_DIR`; `vm/test` collects and publishes it,
 including failures. The fixture stops its QEMU child even if installation or an
 assertion fails. The workflow always destroys the outer VM and removes the private
-answer, key and prepared ISO from the runner. Raw VM logs, disks and credentials
-are not uploaded. Forced runner termination is bounded by hosted-runner disposal.
+answer, key and prepared ISO from the runner. Installer timeouts include VM state
+and available disk space in JUnit, plus a separate console image retained for one
+day. This console belongs only to the synthetic installation. Raw VM logs, disks,
+keys and prepared media are not uploaded. Forced runner termination is bounded
+by hosted-runner disposal.
 
 These checks qualify the virtual installation path. Physical disk/NIC compatibility,
 target-console approval, Home Assistant boot, radio devices and recovery remain

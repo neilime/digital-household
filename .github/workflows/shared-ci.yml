@@ -70,7 +70,7 @@ jobs:
           startup-timeout-minutes: "15"
       - name: Copy test inputs into the isolated VM
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        env:
+        env: &vm-context
           LIMA_HOME: ${{ steps.vm.outputs.vm }}
           VM_NAME: ${{ steps.vm.outputs.name }}
           E2E_DIRECTORY: ${{ steps.fixture.outputs.directory }}
@@ -85,6 +85,21 @@ jobs:
           test-timeout-minutes: "30"
           report-file: proxmox.xml
           report-name: digital-household - Proxmox installation
+      - name: Collect installer diagnostics
+        if: ${{ failure() && steps.test.outcome == 'failure' }}
+        id: diagnostics
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env: *vm-context
+        with:
+          script: await require('./.github/scripts/proxmox-e2e.cjs').collectDiagnostics({ exec, core });
+      - name: Upload synthetic installer console
+        if: ${{ failure() && steps.diagnostics.outputs.path != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: proxmox-installer-console
+          path: ${{ steps.diagnostics.outputs.path }}
+          if-no-files-found: error
+          retention-days: 1
       - name: Destroy VM
         if: ${{ always() && steps.vm.outputs.vm != '' }}
         uses: hoverkraft-tech/ci-github-iac/actions/vm/destroy@5c4b7307d7a2c58a01a3b62607cebde65f96b0a2 # 0.2.0

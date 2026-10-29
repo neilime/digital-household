@@ -82,6 +82,20 @@ exports.stage = async ({ exec }) => {
 	]);
 };
 
+exports.collectDiagnostics = async ({ exec, core }) => {
+	const name = process.env.VM_NAME;
+	const source = "/var/tmp/proxmox-e2e/diagnostics/installer.png";
+	const exists = await exec.exec(
+		"limactl",
+		["shell", "--workdir=/tmp", name, "test", "-s", source],
+		{ ignoreReturnCode: true },
+	);
+	if (exists !== 0) return;
+	const output = path.join(process.env.E2E_DIRECTORY, "installer.png");
+	await exec.exec("limactl", ["copy", `${name}:${source}`, output]);
+	core.setOutput("path", output);
+};
+
 exports.cleanup = () => {
 	const directory = path.resolve(process.env.E2E_DIRECTORY);
 	if (
