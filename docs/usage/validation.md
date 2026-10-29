@@ -51,7 +51,7 @@ use QEMU with KVM, UEFI, two vCPUs, 4 GiB RAM and a new 32 GiB sparse raw disk.
 Raw storage avoids a second copy-on-write layer; `cache=none` bypasses the outer
 guest's file cache while honoring guest flush requests. The test fails if nested
 KVM is unavailable; software emulation is not used.
-The installer has a 30-minute deadline within a 45-minute test allowance.
+The installer has a 30-minute deadline within a 40-minute test allowance.
 Five-minute samples record VM state and disk writes, helping distinguish slow
 package extraction on hosted runners from a stalled installation.
 The inner VM's SSH port binds only to loopback in the outer guest. Initial host-key
