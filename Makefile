@@ -8,7 +8,7 @@ ISO ?= .cache/proxmox/installer.iso
 ANSWER ?= .local/proxmox/answer.toml
 OUTPUT ?= .local/proxmox/autoinstall.iso
 
-.PHONY: help lint-fix ci lint setup test test-baseline check-ansible proxmox-download proxmox-answer-check proxmox-iso proxmox-plan proxmox-configure plan provision configure deploy verify backup
+.PHONY: help lint-fix ci lint setup test test-unit test-baseline check-ansible proxmox-download proxmox-answer-check proxmox-iso proxmox-plan proxmox-configure plan provision configure deploy verify backup
 help: ## Display help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
@@ -36,11 +36,12 @@ setup: ## Build the pinned Proxmox and Ansible tooling container
 	docker build --platform=linux/amd64 --file docker/tooling/Dockerfile \
 		--build-arg UID=$(HOST_UID) --build-arg GID=$(HOST_GID) --tag "$(TOOLING_IMAGE)" .
 
-test: setup ## Validate installer safety checks and native answer compatibility
-	$(call run_tooling,python3 -m unittest discover -s tests -p 'test_*.py' -v)
-	$(MAKE) check-ansible
+test: test-unit check-ansible ## Validate installer safety checks, native answers and Ansible syntax
 
-check-ansible: ## Validate the Proxmox playbook without connecting to a host
+test-unit: setup ## Validate installer safety checks and native answer compatibility
+	$(call run_tooling,python3 -m unittest discover -s tests -p 'test_*.py' -v)
+
+check-ansible: setup ## Validate the Proxmox playbook without connecting to a host
 	$(call run_tooling,ansible-playbook -i ansible/inventory.example.yml ansible/proxmox.yml --syntax-check)
 
 test-baseline: setup ## Apply and reapply the baseline only in a disposable container
