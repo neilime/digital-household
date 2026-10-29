@@ -41,7 +41,7 @@ on the UM690, not in the workstation tooling container.
 
 Prepare an unused LAN address/prefix, gateway, resolver and fully qualified
 hostname. Reserve the address outside the DHCP pool and configure local DNS.
-Keep management ports on the trusted LAN without Internet port forwarding.
+Keep management ports on the trusted LAN without internet port forwarding.
 
 ## Prepare private installation media
 

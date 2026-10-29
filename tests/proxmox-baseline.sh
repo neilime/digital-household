@@ -8,13 +8,13 @@ mkdir -p /run/sshd
 ssh-keygen -A >/dev/null
 /usr/sbin/sshd
 # Seed installer-owned files and unrelated configuration to check the change boundary.
-printf '%s\n' '# synthetic installer repository' > /etc/apt/sources.list.d/pve-enterprise.sources
-printf '%s\n' '# synthetic installer repository' > /etc/apt/sources.list.d/ceph.sources
-sha256sum /etc/apt/sources.list.d/debian.sources > /tmp/debian-sources.sha256
+printf '%s\n' '# synthetic installer repository' >/etc/apt/sources.list.d/pve-enterprise.sources
+printf '%s\n' '# synthetic installer repository' >/etc/apt/sources.list.d/ceph.sources
+sha256sum /etc/apt/sources.list.d/debian.sources >/tmp/debian-sources.sha256
 ansible-playbook -i localhost, tests/proxmox-baseline.yml
-ansible-playbook -i localhost, tests/proxmox-baseline.yml --check > /tmp/baseline-recheck.txt
+ansible-playbook -i localhost, tests/proxmox-baseline.yml --check >/tmp/baseline-recheck.txt
 grep -Eq 'changed=0 .*failed=0' /tmp/baseline-recheck.txt
-sshd -T > /tmp/effective-sshd.txt
+sshd -T >/tmp/effective-sshd.txt
 grep -Fx 'passwordauthentication no' /tmp/effective-sshd.txt
 grep -Fx 'kbdinteractiveauthentication no' /tmp/effective-sshd.txt
 grep -Fx 'permitrootlogin without-password' /tmp/effective-sshd.txt
