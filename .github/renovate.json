@@ -1,7 +1,20 @@
 {
 	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
 	"extends": ["config:recommended"],
-	"enabledManagers": ["ansible", "ansible-galaxy", "terraform"],
+	"enabledManagers": ["ansible", "ansible-galaxy", "terraform", "dockerfile"],
+	"packageRules": [
+		{
+			"matchDatasources": ["docker"],
+			"enabled": false
+		},
+		{
+			"matchDatasources": ["deb"],
+			"matchPackageNames": ["proxmox-auto-install-assistant"],
+			"registryUrls": [
+				"http://download.proxmox.com/debian/pve?suite=trixie&components=pve-no-subscription&binaryArch=amd64"
+			]
+		}
+	],
 	"semanticCommits": "enabled",
 	"minimumReleaseAge": "7 days"
 }

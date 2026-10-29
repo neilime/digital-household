@@ -1,0 +1,9 @@
+---
+- name: Validate baseline configuration in a disposable Debian container
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    proxmox_repository_channel: no-subscription
+  roles:
+    - proxmox_baseline

@@ -1,5 +1,7 @@
 .cache/
 .reports/
+.local/
+*.iso
 __pycache__/
 *.pyc
 node_modules/

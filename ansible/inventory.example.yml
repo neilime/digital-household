@@ -1,0 +1,8 @@
+---
+proxmox:
+  hosts:
+    um690:
+      ansible_host: REPLACE_WITH_MANAGEMENT_ADDRESS
+      ansible_user: root
+      proxmox_expected_fqdn: REPLACE_WITH_HOST_FQDN
+      proxmox_repository_channel: no-subscription

@@ -1,0 +1,46 @@
+---
+- name: Configure the verified Proxmox host
+  hosts: proxmox
+  become: true
+  serial: 1
+  gather_facts: true
+  pre_tasks:
+    - name: Verify the expected platform and target identity
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - proxmox_expected_fqdn is defined
+          - ansible_facts.fqdn == proxmox_expected_fqdn
+          - ansible_user == 'root'
+        fail_msg: Verify the private inventory against the Proxmox console before configuring this host.
+    - name: Read the installed Proxmox release
+      ansible.builtin.command: /usr/bin/pveversion
+      register: proxmox_version
+      changed_when: false
+      check_mode: false
+    - name: Require the supported Proxmox major release
+      ansible.builtin.assert:
+        that: proxmox_version.stdout is match('pve-manager/9[.]')
+    - name: Verify an installed administration key exists
+      ansible.builtin.command: ssh-keygen -l -f /root/.ssh/authorized_keys
+      changed_when: false
+      check_mode: false
+      no_log: true
+    - name: Detect cluster membership
+      ansible.builtin.stat:
+        path: /etc/pve/corosync.conf
+      register: proxmox_cluster
+    - name: Read storage configuration
+      ansible.builtin.slurp:
+        src: /etc/pve/storage.cfg
+      register: proxmox_storage
+      no_log: true
+    - name: Limit this baseline to a standalone host without Ceph
+      ansible.builtin.assert:
+        that:
+          - not proxmox_cluster.stat.exists
+          - (proxmox_storage.content | b64decode) is not search('(?m)^(rbd|cephfs):')
+        fail_msg: This baseline manages a standalone host without Ceph; review an existing cluster separately.
+  roles:
+    - proxmox_baseline

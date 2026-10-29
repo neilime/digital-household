@@ -1,0 +1,22 @@
+# Synthetic input for native installer validation; never use on physical hardware.
+[global]
+keyboard = "fr"
+country = "fr"
+fqdn = "pve.example.invalid"
+mailto = "admin@example.invalid"
+timezone = "Europe/Paris"
+root-password-hashed = "$6$synthetic$012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"
+root-ssh-keys = ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA synthetic-only"]
+reboot-mode = "power-off"
+
+[network]
+source = "from-answer"
+cidr = "192.0.2.10/24"
+dns = "192.0.2.1"
+gateway = "192.0.2.1"
+filter.ID_NET_NAME_MAC = "enx020000000001"
+
+[disk-setup]
+filesystem = "ext4"
+filter-match = "all"
+filter.ID_SERIAL = "SYNTHETIC_INSTALLATION_DISK"
