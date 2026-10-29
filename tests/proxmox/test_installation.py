@@ -59,8 +59,8 @@ class ProxmoxGuest:
 
     def install(self):
         """Boot the prepared UEFI ISO and require installer power-off."""
-        disk = self.directory / "system.qcow2"
-        self.run(["qemu-img", "create", "-f", "qcow2", str(disk), "32G"])
+        disk = self.directory / "system.raw"
+        self.run(["qemu-img", "create", "-f", "raw", str(disk), "32G"])
         shutil.copyfile("/usr/share/OVMF/OVMF_VARS_4M.fd", self.directory / "uefi.fd")
         network = self.answer["network"]
         address = ipaddress.ip_interface(network["cidr"])
@@ -85,7 +85,7 @@ class ProxmoxGuest:
             "-drive",
             f"if=pflash,format=raw,file={self.directory}/uefi.fd",
             "-drive",
-            f"if=none,id=system,format=qcow2,file={disk}",
+            f"if=none,id=system,format=raw,cache=none,file={disk}",
             "-device",
             f"virtio-blk-pci,drive=system,serial={serial}",
             "-netdev",

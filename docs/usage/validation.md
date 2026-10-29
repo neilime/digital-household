@@ -47,8 +47,10 @@ the test rejects a RAM-backed working directory before starting installation.
 [The Lima configuration](../../tests/lima.yml) reserves four vCPUs, 6 GiB of RAM
 and a 30 GiB sparse disk. It exposes the host CPU's virtualization extensions.
 Inside that VM, [the installation tests](../../tests/proxmox/test_installation.py)
-use QEMU with KVM, UEFI, two vCPUs, 4 GiB RAM and a new 32 GiB sparse installation
-disk. The test fails if nested KVM is unavailable; software emulation is not used.
+use QEMU with KVM, UEFI, two vCPUs, 4 GiB RAM and a new 32 GiB sparse raw disk.
+Raw storage avoids a second copy-on-write layer; `cache=none` bypasses the outer
+guest's file cache while honoring guest flush requests. The test fails if nested
+KVM is unavailable; software emulation is not used.
 The inner VM's SSH port binds only to loopback in the outer guest. Initial host-key
 trust is restricted to that owned endpoint; later connections enforce the recorded key.
 
