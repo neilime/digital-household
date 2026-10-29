@@ -24,6 +24,12 @@ Pin all VM actions to the same shared revision. Workflows compose shared operati
 and own cleanup conditions. The test action owns report parsing and publication. Review
 shared CI updates with a complete VM lifecycle before merging.
 
+The bootstrap targets compatible hosts without depending on a manufacturer or
+machine model. Disk and NIC identity, network settings and hostname belong in
+each host's private answer and inventory. The
+[supported host profile](../usage/proxmox-bootstrap.md#supported-host-profile)
+defines the current architecture, storage and networking requirements.
+
 The native Proxmox installer owns the initial disk layout and host networking.
 The repository wrapper verifies the source image and enforces the private-answer
 and exact-target policy before invoking that installer. Ansible owns the ongoing

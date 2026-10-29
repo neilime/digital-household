@@ -1,18 +1,34 @@
-# Bootstrap the UM690 with Proxmox
+# Bootstrap a Proxmox host
 
 Prepare an unattended Proxmox installation and apply the host baseline from a
 Linux workstation with Docker, GNU Make and OpenSSH. Allow 6 GB of free space
-for the source ISO, temporary files and prepared media. The supported target is
-a standalone Proxmox VE 9 host on Debian 13, with one ext4 installation disk,
-wired Ethernet and static IPv4 management networking.
+for the source ISO, temporary files and prepared media.
+
+## Supported host profile
+
+The bootstrap is independent of the machine's manufacturer or model. The current
+ISO and baseline support:
+
+- An x86-64 Intel or AMD host with hardware virtualization enabled for KVM guests.
+- A disk and wired Ethernet interface supported by the pinned installer, exposing
+  the exact udev identifiers described below.
+- A standalone Proxmox VE 9 installation on Debian 13, with one ext4 installation
+  disk and static IPv4 management networking.
+- Console access, either local or through the machine's remote console.
+
+Size RAM and storage for the host services and intended VMs using the
+[Proxmox hardware requirements](https://www.proxmox.com/en/products/proxmox-virtual-environment/requirements).
+Record the actual disk, NIC, network and hostname in a private answer and
+inventory for each host. A prepared ISO contains that host's settings; prepare
+separate media when installing another host.
 
 The installer erases the selected disk when booted. Preparing an ISO does not
 authorize erasing a machine. Confirm the actual disk, saved data and intended
-network settings at the UM690 console before booting unattended media.
+network settings at the target host's console before booting unattended media.
 
 ## Identify the actual target
 
-Connect a screen, keyboard and wired Ethernet. Disconnect unrelated storage.
+Open the local or remote console and connect wired Ethernet. Disconnect unrelated storage.
 Use the unmodified official installer in its diagnostic/debug shell, or a Linux
 live environment, to inspect the hardware without starting installation:
 
@@ -21,7 +37,8 @@ lsblk -d -o NAME,MODEL,SIZE,SERIAL
 ip -br link
 ```
 
-For the chosen disk and connected interface, substitute their actual names:
+For the chosen disk and connected interface, substitute their actual names.
+The NVMe path below is an example; a SATA disk might appear as `/dev/sda`:
 
 ```sh
 udevadm info --query=property --name=/dev/nvme0n1
@@ -37,7 +54,7 @@ Where the native assistant is installed on the target, `device-info` shows the
 available properties. `device-match disk 'ID_SERIAL=ACTUAL_VALUE'` and
 `device-match network 'ID_NET_NAME_MAC=ACTUAL_VALUE'` must each select exactly one
 intended device. Run these subcommands through `proxmox-auto-install-assistant`
-on the UM690, not in the workstation tooling container.
+at the target host's console.
 
 Prepare an unused LAN address/prefix, gateway, resolver and fully qualified
 hostname. Reserve the address outside the DHCP pool and configure local DNS.
@@ -97,7 +114,7 @@ when no longer needed. The original public ISO may remain cached.
 2. Flash the prepared ISO to a verified spare USB using the
    [official installation-media procedure](https://github.com/proxmox/pve-docs/blob/master/pve-installation-media.adoc).
    Flashing overwrites that USB drive.
-3. Enable hardware virtualization in firmware and boot the USB on the UM690.
+3. Enable Intel VT-x or AMD-V/SVM in firmware and boot the USB on the target host.
    The prepared image selects unattended installation automatically; do not boot
    it on another machine or leave it inserted after installation.
 4. After the installer powers off, remove the USB and boot from the internal disk.
@@ -112,7 +129,8 @@ safe to erase. Console verification remains required.
 
 Copy [the inventory example](../../ansible/inventory.example.yml) to
 `.local/proxmox/inventory.yml` and replace its placeholders with the installed
-host's address and FQDN. Select `enterprise` if the node has a subscription;
+host's address and FQDN. `proxmox_host` is an example inventory alias;
+`ansible_host` selects the target address. Select `enterprise` if the node has a subscription;
 otherwise select `no-subscription`. Enterprise is the upstream recommendation
 for production; the no-subscription packages receive less extensive testing.
 
@@ -155,7 +173,7 @@ configure backups. Keep the management interface on the trusted LAN.
 ## Acceptance and recovery
 
 - [ ] Installation completes on the intended disk and the host boots without the USB.
-- [ ] RAM, disk capacity and KVM availability match the UM690 inventory.
+- [ ] RAM, disk capacity and KVM availability match the target host's private inventory.
 - [ ] Web UI and key-based SSH remain reachable after a reboot.
 - [ ] DNS, static addressing and the chosen APT channel work.
 - [ ] Baseline preview reports no changes after application.
