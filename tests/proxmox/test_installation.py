@@ -47,9 +47,7 @@ class ProxmoxGuest:
     @staticmethod
     def run(args, timeout=60):
         """Keep failures bounded; raw VM logs and answer contents stay private."""
-        result = subprocess.run(
-            args, capture_output=True, text=True, timeout=timeout, check=False
-        )
+        result = subprocess.run(args, capture_output=True, text=True, timeout=timeout, check=False)
         if result.returncode:
             raise RuntimeError(f"{args[0]} failed with exit code {result.returncode}")
         return result.stdout.strip()
@@ -67,7 +65,7 @@ class ProxmoxGuest:
         address = ipaddress.ip_interface(network["cidr"])
         mac = ":".join(re.findall("..", network["filter"]["ID_NET_NAME_MAC"][3:]))
         serial = self.answer["disk-setup"]["filter"]["ID_SERIAL"]
-        self.arguments = [
+        arguments = [
             "qemu-system-x86_64",
             "-machine",
             "q35,accel=kvm",
@@ -100,12 +98,12 @@ class ProxmoxGuest:
             "-serial",
             f"file:{self.directory}/serial.log",
         ]
-        self.log = (self.directory / "qemu.log").open("w")
+        self.log = (self.directory / "qemu.log").open("w", encoding="utf-8")
         # This instance only sees a new regular file, never a host block device.
         # pylint: disable=consider-using-with
         self.process = subprocess.Popen(
             [
-                *self.arguments,
+                *arguments,
                 "-cdrom",
                 str(self.source / "autoinstall.iso"),
                 "-boot",
@@ -114,11 +112,9 @@ class ProxmoxGuest:
             stdout=self.log,
             stderr=self.log,
         )
-        assert (
-            self.process.wait(timeout=900) == 0
-        ), "Installer did not power off successfully"
+        assert self.process.wait(timeout=900) == 0, "Installer did not power off successfully"
         self.process = subprocess.Popen(
-            [*self.arguments, "-boot", "order=c"],
+            [*arguments, "-boot", "order=c"],
             stdout=self.log,
             stderr=self.log,
         )
@@ -128,10 +124,11 @@ class ProxmoxGuest:
     def wait_for_ssh(self, first_boot=False, previous_boot=None):
         """Require a running QEMU and a new boot ID when verifying a reboot."""
         deadline = time.monotonic() + 300
+        readiness = "for service in pve-cluster pvedaemon pveproxy; do "
+        readiness += 'systemctl is-active --quiet "$service" || exit 1; done; '
+        readiness += "cat /proc/sys/kernel/random/boot_id"
         while time.monotonic() < deadline:
-            assert (
-                self.process.poll() is None
-            ), "Installed Proxmox VM exited unexpectedly"
+            assert self.process.poll() is None, "Installed Proxmox VM exited unexpectedly"
             options = ["-o", "StrictHostKeyChecking=accept-new"] if first_boot else []
             result = subprocess.run(
                 [
@@ -139,7 +136,7 @@ class ProxmoxGuest:
                     *options,
                     *self.ssh_options,
                     "root@127.0.0.1",
-                    "systemctl is-active --quiet pve-cluster pvedaemon pveproxy && cat /proc/sys/kernel/random/boot_id",
+                    readiness,
                 ],
                 capture_output=True,
                 text=True,
@@ -154,6 +151,8 @@ class ProxmoxGuest:
     def baseline(self, check=False):
         """Exercise the deployment playbook, including its actual target preflight."""
         inventory = self.directory / "inventory.json"
+        known_hosts = self.directory / "known_hosts"
+        ssh_args = f"-o UserKnownHostsFile={known_hosts} -o IdentitiesOnly=yes"
         inventory.write_text(
             json.dumps(
                 {
@@ -163,10 +162,8 @@ class ProxmoxGuest:
                                 "ansible_host": "127.0.0.1",
                                 "ansible_port": 2222,
                                 "ansible_user": "root",
-                                "ansible_ssh_private_key_file": str(
-                                    self.source / "key"
-                                ),
-                                "ansible_ssh_common_args": f"-o UserKnownHostsFile={self.directory}/known_hosts -o IdentitiesOnly=yes",
+                                "ansible_ssh_private_key_file": str(self.source / "key"),
+                                "ansible_ssh_common_args": ssh_args,
                                 "proxmox_expected_fqdn": self.answer["global"]["fqdn"],
                                 "proxmox_repository_channel": "no-subscription",
                             }
@@ -196,21 +193,17 @@ class ProxmoxGuest:
                 except subprocess.TimeoutExpired:
                     self.process.kill()
                     self.process.wait(timeout=15)
-            assert (
-                self.process is None or self.process.poll() is not None
-            ), "QEMU cleanup failed"
+            assert self.process is None or self.process.poll() is not None, "QEMU cleanup failed"
         finally:
             if self.log is not None:
                 self.log.close()
 
 
-@pytest.fixture(scope="module")
-def guest():
+@pytest.fixture(scope="module", name="guest")
+def installed_guest():
     """Allocate a private nested guest only inside the isolated Lima test VM."""
     assert Path("/etc/digital-household-disposable-test").is_file()
-    assert os.access(
-        "/dev/kvm", os.R_OK | os.W_OK
-    ), "Nested KVM is required; emulation is not a substitute"
+    assert os.access("/dev/kvm", os.R_OK | os.W_OK), "Nested KVM is required"
     with tempfile.TemporaryDirectory(prefix="proxmox-install-") as directory:
         machine = ProxmoxGuest(Path(directory))
         try:
@@ -223,36 +216,27 @@ def guest():
 def test_installed_platform_storage_and_management(guest):
     """The ISO produces a bootable UEFI Proxmox host with working local storage and API."""
     version = guest.command("pveversion")
-    major = json.loads(Path("proxmox/iso.json").read_text())["version"].split(".")[0]
+    manifest = json.loads(Path("proxmox/iso.json").read_text(encoding="utf-8"))
+    major = manifest["version"].split(".")[0]
     assert version.startswith(f"pve-manager/{major}.")
     assert guest.command("uname -r").endswith("-pve")
     guest.command("test -d /sys/firmware/efi && test -c /dev/kvm")
     assert guest.command("findmnt -n -o FSTYPE /") == "ext4"
-    assert (
-        guest.command("lsblk -dn -o SERIAL /dev/vda")
-        == guest.answer["disk-setup"]["filter"]["ID_SERIAL"]
-    )
+    serial = guest.answer["disk-setup"]["filter"]["ID_SERIAL"]
+    assert guest.command("lsblk -dn -o SERIAL /dev/vda") == serial
     storage = guest.command("pvesm status")
     assert re.search(r"local\s+dir\s+active", storage)
     assert re.search(r"local-lvm\s+lvmthin\s+active", storage)
-    assert (
-        guest.command("systemctl is-active pve-cluster pvedaemon pveproxy").splitlines()
-        == ["active"] * 3
-    )
-    assert "Proxmox" in guest.command(
-        "curl --fail --silent --insecure https://127.0.0.1:8006/"
-    )
+    services = guest.command("systemctl is-active pve-cluster pvedaemon pveproxy")
+    assert services.splitlines() == ["active"] * 3
+    assert "Proxmox" in guest.command("curl --fail --silent --insecure https://127.0.0.1:8006/")
 
 
 def test_static_network_and_identity(guest):
     """The installed bridge, route and hostname use the supplied synthetic answer."""
     assert guest.command("hostname -f") == guest.answer["global"]["fqdn"]
-    assert guest.answer["network"]["cidr"] in guest.command(
-        "ip -4 -o addr show dev vmbr0"
-    )
-    assert f"via {guest.answer['network']['gateway']}" in guest.command(
-        "ip -4 route show default"
-    )
+    assert guest.answer["network"]["cidr"] in guest.command("ip -4 -o addr show dev vmbr0")
+    assert f"via {guest.answer['network']['gateway']}" in guest.command("ip -4 route show default")
     guest.command("getent hosts download.proxmox.com")
 
 
@@ -261,26 +245,30 @@ def test_baseline_is_idempotent_and_survives_reboot(guest):
     debian_sources = guest.command("sha256sum /etc/apt/sources.list.d/debian.sources")
     guest.baseline()
     for check in (False, True):
-        assert re.search(
-            r"changed=0\s+unreachable=0\s+failed=0", guest.baseline(check=check)
-        )
-    assert (
-        guest.command("sha256sum /etc/apt/sources.list.d/debian.sources")
-        == debian_sources
-    )
+        assert re.search(r"changed=0\s+unreachable=0\s+failed=0", guest.baseline(check=check))
+    assert guest.command("sha256sum /etc/apt/sources.list.d/debian.sources") == debian_sources
     effective = guest.command("sshd -T").splitlines()
     assert "passwordauthentication no" in effective
     assert "kbdinteractiveauthentication no" in effective
     assert "permitrootlogin without-password" in effective
     guest.command("apt-get update -o APT::Update::Error-Mode=any", timeout=300)
     boot = guest.command("cat /proc/sys/kernel/random/boot_id")
-    guest.command("systemctl reboot --no-block")
+    guest.run(
+        [
+            "ansible",
+            "-i",
+            str(guest.directory / "inventory.json"),
+            "proxmox",
+            "-m",
+            "ansible.builtin.reboot",
+            "-a",
+            "reboot_timeout=300",
+        ],
+        timeout=360,
+    )
     guest.wait_for_ssh(previous_boot=boot)
     assert "passwordauthentication no" in guest.command("sshd -T").splitlines()
-    assert "Proxmox" in guest.command(
-        "curl --retry 12 --retry-connrefused --retry-delay 5 --fail --silent --insecure https://127.0.0.1:8006/",
-        timeout=90,
-    )
-    assert re.search(
-        r"changed=0\s+unreachable=0\s+failed=0", guest.baseline(check=True)
-    )
+    web_check = "curl --retry 12 --retry-connrefused --retry-delay 5"
+    web_check += " --fail --silent --insecure https://127.0.0.1:8006/"
+    assert "Proxmox" in guest.command(web_check, timeout=90)
+    assert re.search(r"changed=0\s+unreachable=0\s+failed=0", guest.baseline(check=True))
