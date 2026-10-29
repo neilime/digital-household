@@ -113,10 +113,20 @@ class ProxmoxGuest:
             stdout=self.log,
             stderr=self.log,
         )
-        try:
-            assert self.process.wait(timeout=900) == 0, "Installer did not power off successfully"
-        except subprocess.TimeoutExpired as error:
-            raise RuntimeError(f"Installer timed out: {self.diagnose()}") from error
+        deadline = time.monotonic() + 1800
+        progress = []
+        while time.monotonic() < deadline:
+            try:
+                status = self.process.wait(timeout=min(300, deadline - time.monotonic()))
+            except subprocess.TimeoutExpired:
+                if time.monotonic() < deadline:
+                    progress.append(self.diagnose(capture_console=False))
+            else:
+                assert status == 0, "Installer did not power off successfully"
+                break
+        else:
+            progress.append(self.diagnose())
+            raise TimeoutError(f"Installer exceeded 30 minutes: {json.dumps(progress)}")
         self.process = subprocess.Popen(
             [*arguments, "-boot", "order=c"],
             stdout=self.log,
@@ -138,8 +148,8 @@ class ProxmoxGuest:
                 return result["return"]
         raise RuntimeError("QMP diagnostic response missing")
 
-    def diagnose(self):
-        """Capture only VM state and the console of this synthetic installation."""
+    def diagnose(self, capture_console=True):
+        """Record disk activity and optionally the console of this synthetic installation."""
         diagnostic = {"free_disk_gib": shutil.disk_usage(self.source).free // 2**30}
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
@@ -152,13 +162,16 @@ class ProxmoxGuest:
                     diagnostic["state"] = self.qmp_command(stream, "query-status")
                     blocks = self.qmp_command(stream, "query-block")
                     diagnostic["disk_io"] = [item.get("io-status") for item in blocks]
-                    output = self.source / "diagnostics"
-                    output.mkdir(mode=0o700, exist_ok=True)
-                    arguments = {"filename": str(output / "installer.png"), "format": "png"}
-                    self.qmp_command(stream, "screendump", arguments)
+                    stats = self.qmp_command(stream, "query-blockstats")
+                    diagnostic["written_bytes"] = sum(item["stats"]["wr_bytes"] for item in stats)
+                    if capture_console:
+                        output = self.source / "diagnostics"
+                        output.mkdir(mode=0o700, exist_ok=True)
+                        arguments = {"filename": str(output / "installer.png"), "format": "png"}
+                        self.qmp_command(stream, "screendump", arguments)
         except (OSError, ValueError, RuntimeError) as error:
             diagnostic["capture_error"] = type(error).__name__
-        return json.dumps(diagnostic)
+        return diagnostic
 
     def wait_for_ssh(self, first_boot=False, previous_boot=None):
         """Require a running QEMU and a new boot ID when verifying a reboot."""

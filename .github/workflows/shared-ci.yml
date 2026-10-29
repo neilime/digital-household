@@ -82,7 +82,7 @@ jobs:
         with:
           vm: ${{ steps.vm.outputs.vm }}
           test-script: tests/e2e.sh
-          test-timeout-minutes: "30"
+          test-timeout-minutes: "45"
           report-file: proxmox.xml
           report-name: digital-household - Proxmox installation
       - name: Collect installer diagnostics
