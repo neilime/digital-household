@@ -41,6 +41,7 @@ jobs:
           test-playbook: tests/proxmox-test.yml
           report-name: digital-household - Ansible tests
   vm:
+    name: Proxmox installation E2E
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
@@ -51,20 +52,47 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Prepare synthetic installation identity
+        id: fixture
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: require('./.github/scripts/proxmox-e2e.cjs').prepare({ core });
+      - name: Build verified unattended ISO
+        env:
+          E2E_DIRECTORY: ${{ steps.fixture.outputs.directory }}
+        run: make proxmox-download proxmox-iso ANSWER="$E2E_DIRECTORY/answer.toml" OUTPUT="$E2E_DIRECTORY/autoinstall.iso"
       - name: Create VM
         id: vm
         uses: hoverkraft-tech/ci-github-iac/actions/vm/create@5c4b7307d7a2c58a01a3b62607cebde65f96b0a2 # 0.2.0
         with:
           vm-config: tests/lima.yml
+          startup-timeout-minutes: "15"
+      - name: Copy test inputs into the isolated VM
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          LIMA_HOME: ${{ steps.vm.outputs.vm }}
+          VM_NAME: ${{ steps.vm.outputs.name }}
+          E2E_DIRECTORY: ${{ steps.fixture.outputs.directory }}
+        with:
+          script: await require('./.github/scripts/proxmox-e2e.cjs').stage({ exec });
       - name: Execute guest assertions
         id: test
         uses: hoverkraft-tech/ci-github-iac/actions/vm/test@5c4b7307d7a2c58a01a3b62607cebde65f96b0a2 # 0.2.0
         with:
           vm: ${{ steps.vm.outputs.vm }}
           test-script: tests/e2e.sh
-          report-name: digital-household - VM tests
+          test-timeout-minutes: "30"
+          report-file: proxmox.xml
+          report-name: digital-household - Proxmox installation
       - name: Destroy VM
         if: ${{ always() && steps.vm.outputs.vm != '' }}
         uses: hoverkraft-tech/ci-github-iac/actions/vm/destroy@5c4b7307d7a2c58a01a3b62607cebde65f96b0a2 # 0.2.0
         with:
           vm: ${{ steps.vm.outputs.vm }}
+      - name: Remove private installation inputs
+        if: ${{ always() && steps.fixture.outputs.directory != '' }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          E2E_DIRECTORY: ${{ steps.fixture.outputs.directory }}
+        with:
+          script: require('./.github/scripts/proxmox-e2e.cjs').cleanup();

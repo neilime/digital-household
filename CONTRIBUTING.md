@@ -17,6 +17,10 @@ playbook reuses the same disposable-container assertions and publishes native
 JUnit reports. Ansible Lint stays in the separate linter job.
 VM integration tests run in CI; see the
 [validation guide](docs/usage/validation.md) for scenarios and reporting.
+The Proxmox end-to-end job uses the shared VM actions to isolate a real unattended
+installation, then runs pytest inside that guest. Keep the pytest pin in
+`tests/proxmox/requirements.txt`; Dependabot updates it with the tooling Python
+requirements. Keep workflow scripting in adjacent GitHub Script modules.
 
 `main-ci.yml` and `pull-request-ci.yml` call `shared-ci.yml`. Main supports
 pushes and manual runs; PR CI also supports merge queues. Both cancel superseded

@@ -11,11 +11,9 @@ Debian container, checks effective SSH configuration, preserves Debian APT
 sources, verifies both Proxmox channels and checks an unchanged preview.
 These host-changing tests must never run directly on the workstation.
 
-CI runs both commands in its bootstrap job. They do not boot a Proxmox ISO or
-exercise production preflight against a real Proxmox host. For installer changes,
-also prepare an ISO locally using the synthetic answer fixture copied with mode
-600 into `.local/`. Inspect it with the native `inspect-iso` command. Do not use
-that fixture on real hardware, and do not upload prepared ISOs.
+The bootstrap CI job runs the installer unit tests and the same container
+assertions through the shared Ansible test action. Its native JUnit reports are
+separate from the installation end-to-end results below.
 
 VM validation runs on GitHub-hosted Linux runners through
 [the shared CI job](../../.github/workflows/shared-ci.yml). Pull requests and
@@ -32,10 +30,38 @@ and schedules destruction with `always()`, including after reporting failure.
 Use `command` instead of `test-script` for inline guest commands. Optional
 `coverage: codecov` requires explicit report selection and `id-token: write`.
 
-The assertions validate a cold Ubuntu boot and synthetic guest read/write behavior.
-They do not validate a production service or nested Proxmox. The repository owns
-[the Lima configuration](../../tests/lima.yml), including the pinned Ubuntu image
-and guest resources. CI passes it through the required `vm-config` input.
+The installation scenario builds the real, checksum-verified Proxmox ISO using
+the existing tooling and synthetic answer fixture. Each run generates a temporary
+SSH key and password hash. Only explicitly selected source files and these test
+inputs are copied into the isolated Ubuntu guest; ignored private inventory is
+excluded. The host checkout is not mounted in that guest.
+
+[The Lima configuration](../../tests/lima.yml) reserves four vCPUs, 6 GiB of RAM
+and a 30 GiB sparse disk. It exposes the host CPU's virtualization extensions.
+Inside that VM, [the installation tests](../../tests/proxmox/test_installation.py)
+use QEMU with KVM, UEFI, two vCPUs, 4 GiB RAM and a new 32 GiB sparse installation
+disk. The test fails if nested KVM is unavailable; software emulation is not used.
+The inner VM's SSH port binds only to loopback in the outer guest. Initial host-key
+trust is restricted to that owned endpoint; later connections enforce the recorded key.
+
+The tests verify:
+
+- Unattended installation powers off and the installed disk boots without the ISO.
+- Proxmox kernel, UEFI boot, localStorage, management services and web UI work.
+- The disk serial, static management bridge, route, DNS and hostname match the answer.
+- The actual deployment playbook passes its target checks and applies the baseline.
+- Reapplication and check mode report no changes; Debian package sources are preserved.
+- Package indices refresh successfully and key-only SSH persists after reboot.
+
+Pytest writes native JUnit to `REPORTS_DIR`; `vm/test` collects and publishes it,
+including failures. The fixture stops its QEMU child even if installation or an
+assertion fails. The workflow always destroys the outer VM and removes the private
+answer, key and prepared ISO from the runner. Raw VM logs, disks and credentials
+are not uploaded. Forced runner termination is bounded by hosted-runner disposal.
+
+These checks qualify the virtual installation path. Physical disk/NIC compatibility,
+target-console approval, Home Assistant boot, radio devices and recovery remain
+separate acceptance tasks. Never boot the synthetic media on physical hardware.
 
 Each invocation uses its own short private Lima runtime under `/tmp`, removed
 with its keys after verified teardown. Each test keeps its own sanitized report.

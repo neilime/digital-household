@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# The guest supplies its distribution metadata.
-# shellcheck source=/dev/null
-. /etc/os-release
-test "$ID" = ubuntu
-test -d /run/systemd/system
-test ! -e /tmp/iac-fixture
-printf '%s' synthetic >/tmp/iac-fixture
-test "$(cat /tmp/iac-fixture)" = synthetic
-rm /tmp/iac-fixture
+# Never run this scenario directly on a developer workstation.
+test -f /etc/digital-household-disposable-test
+test -r /dev/kvm && test -w /dev/kvm
+cd /tmp/proxmox-e2e
+python3 -m venv .venv
+.venv/bin/pip install --disable-pip-version-check -r docker/tooling/requirements.txt -r tests/proxmox/requirements.txt
+export PATH="$PWD/.venv/bin:$PATH"
+export ANSIBLE_CONFIG="$PWD/ansible/ansible.cfg"
+pytest tests/proxmox/test_installation.py --junitxml="$REPORTS_DIR/proxmox.xml" \
+	--tb=short -o junit_logging=no
