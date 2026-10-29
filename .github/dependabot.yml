@@ -2,6 +2,10 @@ version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
+    groups:
+      github-actions-dependencies:
+        patterns:
+          - "*"
     cooldown:
       default-days: 7
     schedule:
@@ -10,12 +14,20 @@ updates:
     directories:
       - /
       - /docker/tooling
+    groups:
+      docker-dependencies:
+        patterns:
+          - "*"
     cooldown:
       default-days: 7
     schedule:
       interval: weekly
   - package-ecosystem: pip
     directory: /docker/tooling
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
     cooldown:
       default-days: 7
     schedule:
