@@ -41,9 +41,10 @@ Keep the five Hoverkraft maintenance workflows alongside the CI entrypoints:
 The four collaboration workflows reuse pinned ci-github-common workflows.
 Renovate uses the repository's built-in `GITHUB_TOKEN`, scoped through job
 permissions. No additional credential is required. Keep the repository
-configuration in `.github/renovate.json`. Dependabot owns Actions and Docker
-and Python requirements updates, including the tooling image; Renovate handles
-the pinned Proxmox assistant Debian package, Ansible collections and Terraform
+configuration in `.github/renovate.json`. Dependabot owns Actions, Docker
+and Python requirements updates, including the tooling image. All version updates
+are grouped per ecosystem, following workstation-manager. Renovate handles the
+pinned Proxmox assistant Debian package, Ansible collections and Terraform
 dependencies. Docker updates are disabled in Renovate to avoid duplicate ownership.
 
 Review Proxmox installer releases manually against the
