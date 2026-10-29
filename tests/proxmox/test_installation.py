@@ -204,7 +204,9 @@ def installed_guest():
     """Allocate a private nested guest only inside the isolated Lima test VM."""
     assert Path("/etc/digital-household-disposable-test").is_file()
     assert os.access("/dev/kvm", os.R_OK | os.W_OK), "Nested KVM is required"
-    with tempfile.TemporaryDirectory(prefix="proxmox-install-") as directory:
+    filesystem = ProxmoxGuest.run(["findmnt", "-n", "-o", "FSTYPE", "--target", str(Path.cwd())])
+    assert filesystem not in ("tmpfs", "ramfs"), "VM disks require disk-backed storage"
+    with tempfile.TemporaryDirectory(prefix="proxmox-install-", dir=Path.cwd()) as directory:
         machine = ProxmoxGuest(Path(directory))
         try:
             machine.install()

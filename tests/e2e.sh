@@ -4,7 +4,7 @@ set -euo pipefail
 # Never run this scenario directly on a developer workstation.
 test -f /etc/digital-household-disposable-test
 test -r /dev/kvm && test -w /dev/kvm
-cd /tmp/proxmox-e2e
+cd /var/tmp/proxmox-e2e
 python3 -m venv .venv
 .venv/bin/pip install --disable-pip-version-check -r docker/tooling/requirements.txt -r tests/proxmox/requirements.txt
 export PATH="$PWD/.venv/bin:$PATH"

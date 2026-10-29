@@ -21,6 +21,11 @@ main pushes run it automatically; the main workflow also supports manual runs.
 The job composes the pinned `vm/create`, `vm/test` and `vm/destroy` actions,
 using [our assertions](../../tests/e2e.sh). Keep all three actions on the same
 immutable revision. The creation action installs Lima and QEMU on the runner.
+This job uses the supported `ubuntu-24.04` runner because `ci-github-iac` 0.2.0
+stores Lima runtimes under `/tmp`. The larger nested workload requires disk-backed
+host storage; Ubuntu 26.04 defaults `/tmp` to RAM-backed storage. Moving this job
+to that runner requires a shared-action release with a disk-backed runtime path.
+The outer guest still uses the pinned Ubuntu 26.04 image.
 
 `vm/test` parses results, renders summaries and annotations, updates a PR comment
 and uploads completed reports. Its stable `report-name` keeps comments distinct;
@@ -35,6 +40,9 @@ the existing tooling and synthetic answer fixture. Each run generates a temporar
 SSH key and password hash. Only explicitly selected source files and these test
 inputs are copied into the isolated Ubuntu guest; ignored private inventory is
 excluded. The host checkout is not mounted in that guest.
+Large test inputs and the nested disk use `/var/tmp` on the guest's disk-backed
+filesystem. Ubuntu's RAM-backed `/tmp` is reserved for small temporary reports;
+the test rejects a RAM-backed working directory before starting installation.
 
 [The Lima configuration](../../tests/lima.yml) reserves four vCPUs, 6 GiB of RAM
 and a 30 GiB sparse disk. It exposes the host CPU's virtualization extensions.

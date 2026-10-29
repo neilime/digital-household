@@ -45,7 +45,7 @@ exports.stage = async ({ exec }) => {
 		"mkdir",
 		"-m",
 		"700",
-		"/tmp/proxmox-e2e",
+		"/var/tmp/proxmox-e2e",
 	]);
 	const files = execFileSync("git", [
 		"ls-files",
@@ -69,12 +69,12 @@ exports.stage = async ({ exec }) => {
 		await exec.exec("limactl", [
 			"copy",
 			`${directory}/${file}`,
-			`${name}:/tmp/proxmox-e2e/${file}`,
+			`${name}:/var/tmp/proxmox-e2e/${file}`,
 		]);
 	}
 	await exec.exec("limactl", [
 		"shell",
-		"--workdir=/tmp/proxmox-e2e",
+		"--workdir=/var/tmp/proxmox-e2e",
 		name,
 		"tar",
 		"-xf",

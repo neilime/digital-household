@@ -42,7 +42,8 @@ jobs:
           report-name: digital-household - Ansible tests
   vm:
     name: Proxmox installation E2E
-    runs-on: ubuntu-latest
+    # ci-github-iac 0.2.0 stores Lima disks in /tmp; this workload needs disk-backed /tmp.
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
       contents: read
