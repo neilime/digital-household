@@ -34,19 +34,19 @@ exports.prepare = ({ core }) => {
 	});
 };
 
-exports.stage = async ({ exec }) => {
-	const name = process.env.VM_NAME;
-	const directory = process.env.E2E_DIRECTORY;
+function fixtureDirectory() {
+	const directory = path.resolve(process.env.E2E_DIRECTORY || "");
+	if (
+		path.dirname(directory) !== path.resolve(".local") ||
+		!/^proxmox-e2e-[a-zA-Z0-9]+$/.test(path.basename(directory))
+	) {
+		throw new Error("Refusing access outside this test's private directory");
+	}
+	return directory;
+}
+
+async function stage(exec, directory) {
 	// Copy an explicit allowlist. Never mount the checkout or copy private local inventory.
-	await exec.exec("limactl", [
-		"shell",
-		"--workdir=/tmp",
-		name,
-		"mkdir",
-		"-m",
-		"700",
-		"/var/tmp/proxmox-e2e",
-	]);
 	const files = execFileSync("git", [
 		"ls-files",
 		"--cached",
@@ -63,46 +63,59 @@ exports.stage = async ({ exec }) => {
 	await exec.exec(
 		"tar",
 		["-cf", `${directory}/source.tar`, "--null", "-T", "-"],
-		{ input: files },
+		{
+			input: files,
+		},
 	);
-	for (const file of ["source.tar", "answer.toml", "key", "autoinstall.iso"]) {
-		await exec.exec("limactl", [
-			"copy",
-			`${directory}/${file}`,
-			`${name}:/var/tmp/proxmox-e2e/${file}`,
+	await exec.exec("tar", ["-xf", `${directory}/source.tar`, "-C", directory]);
+	fs.unlinkSync(`${directory}/source.tar`);
+}
+
+exports.run = async ({ exec, core }) => {
+	const directory = fixtureDirectory();
+	const kvm = fs.statSync("/dev/kvm");
+	if (!kvm.isCharacterDevice())
+		throw new Error("A KVM-capable runner is required");
+	await stage(exec, directory);
+	try {
+		await exec.exec("docker", [
+			"run",
+			"--name",
+			path.basename(directory),
+			"--init",
+			"--device=/dev/kvm",
+			"--group-add",
+			String(kvm.gid),
+			"--user",
+			`${process.getuid()}:${process.getgid()}`,
+			"--cap-drop=ALL",
+			"--security-opt=no-new-privileges",
+			"--mount",
+			`type=bind,src=${directory},dst=/var/tmp/proxmox-e2e`,
+			"digital-household-proxmox-test:local",
 		]);
+	} finally {
+		for (const [output, file] of Object.entries({
+			report: "reports/proxmox.xml",
+			console: "diagnostics/installer.png",
+		})) {
+			const filename = path.join(directory, file);
+			if (fs.existsSync(filename)) core.setOutput(output, filename);
+		}
 	}
-	await exec.exec("limactl", [
-		"shell",
-		"--workdir=/var/tmp/proxmox-e2e",
-		name,
-		"tar",
-		"-xf",
-		"source.tar",
+};
+
+exports.cleanup = async ({ exec }) => {
+	const directory = fixtureDirectory();
+	const name = path.basename(directory);
+	const { stdout } = await exec.getExecOutput("docker", [
+		"container",
+		"ls",
+		"--all",
+		"--filter",
+		`name=^/${name}$`,
+		"--format={{.ID}}",
 	]);
-};
-
-exports.collectDiagnostics = async ({ exec, core }) => {
-	const name = process.env.VM_NAME;
-	const source = "/var/tmp/proxmox-e2e/diagnostics/installer.png";
-	const exists = await exec.exec(
-		"limactl",
-		["shell", "--workdir=/tmp", name, "test", "-s", source],
-		{ ignoreReturnCode: true },
-	);
-	if (exists !== 0) return;
-	const output = path.join(process.env.E2E_DIRECTORY, "installer.png");
-	await exec.exec("limactl", ["copy", `${name}:${source}`, output]);
-	core.setOutput("path", output);
-};
-
-exports.cleanup = () => {
-	const directory = path.resolve(process.env.E2E_DIRECTORY);
-	if (
-		path.dirname(directory) !== path.resolve(".local") ||
-		!path.basename(directory).startsWith("proxmox-e2e-")
-	) {
-		throw new Error("Refusing cleanup outside this test's private directory");
-	}
+	if (stdout.trim()) await exec.exec("docker", ["rm", "--force", name]);
 	fs.rmSync(directory, { recursive: true, force: true });
 };

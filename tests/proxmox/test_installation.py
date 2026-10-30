@@ -16,7 +16,7 @@ import pytest
 
 
 class ProxmoxGuest:
-    """Own only the nested QEMU process and files created for this test."""
+    """Own only the QEMU process and files created for this test."""
 
     def __init__(self, directory: Path):
         self.directory = directory
@@ -113,7 +113,7 @@ class ProxmoxGuest:
             stdout=self.log,
             stderr=self.log,
         )
-        deadline = time.monotonic() + 1800
+        deadline = time.monotonic() + 900
         progress = []
         while time.monotonic() < deadline:
             try:
@@ -126,7 +126,7 @@ class ProxmoxGuest:
                 break
         else:
             progress.append(self.diagnose())
-            raise TimeoutError(f"Installer exceeded 30 minutes: {json.dumps(progress)}")
+            raise TimeoutError(f"Installer exceeded 15 minutes: {json.dumps(progress)}")
         self.process = subprocess.Popen(
             [*arguments, "-boot", "order=c"],
             stdout=self.log,
@@ -253,9 +253,9 @@ class ProxmoxGuest:
 
 @pytest.fixture(scope="module", name="guest")
 def installed_guest():
-    """Allocate a private nested guest only inside the isolated Lima test VM."""
+    """Allocate a private QEMU guest only inside the disposable test container."""
     assert Path("/etc/digital-household-disposable-test").is_file()
-    assert os.access("/dev/kvm", os.R_OK | os.W_OK), "Nested KVM is required"
+    assert os.access("/dev/kvm", os.R_OK | os.W_OK), "KVM is required"
     filesystem = ProxmoxGuest.run(["findmnt", "-n", "-o", "FSTYPE", "--target", str(Path.cwd())])
     assert filesystem not in ("tmpfs", "ramfs"), "VM disks require disk-backed storage"
     with tempfile.TemporaryDirectory(prefix="proxmox-install-", dir=Path.cwd()) as directory:

@@ -4,11 +4,12 @@ SHELL := /bin/bash
 HOST_UID := $(shell id -u)
 HOST_GID := $(shell id -g)
 TOOLING_IMAGE := digital-household-tooling:local
+E2E_IMAGE := digital-household-proxmox-test:local
 ISO ?= .cache/proxmox/installer.iso
 ANSWER ?= .local/proxmox/answer.toml
 OUTPUT ?= .local/proxmox/autoinstall.iso
 
-.PHONY: help lint-fix ci lint setup test test-unit test-baseline check-ansible proxmox-download proxmox-answer-check proxmox-iso proxmox-plan proxmox-configure plan provision configure deploy verify backup
+.PHONY: help lint-fix ci lint setup setup-e2e test test-unit test-baseline check-ansible proxmox-download proxmox-answer-check proxmox-iso proxmox-plan proxmox-configure plan provision configure deploy verify backup
 help: ## Display help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
@@ -33,8 +34,12 @@ ci: ## Execute local CI tasks
 	$(MAKE) test-baseline
 
 setup: ## Build the pinned Proxmox and Ansible tooling container
-	docker build --platform=linux/amd64 --file docker/tooling/Dockerfile \
+	docker build --platform=linux/amd64 --file docker/tooling/Dockerfile --target tooling \
 		--build-arg UID=$(HOST_UID) --build-arg GID=$(HOST_GID) --tag "$(TOOLING_IMAGE)" .
+
+setup-e2e: ## Build the disposable QEMU installation-test container
+	docker build --platform=linux/amd64 --file docker/tooling/Dockerfile --target proxmox-test \
+		--build-arg UID=$(HOST_UID) --build-arg GID=$(HOST_GID) --tag "$(E2E_IMAGE)" .
 
 test: test-unit check-ansible ## Validate installer safety checks, native answers and Ansible syntax
 

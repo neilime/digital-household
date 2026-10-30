@@ -7,8 +7,9 @@
   Use domain-specific credentials; never share professional and personal identities.
 - Keep secrets in Bitwarden for human custody. Deployment automation receives only
   narrowly scoped credentials from a protected environment when implemented.
-- Compose pinned Hoverkraft VM creation, test and destruction actions in CI jobs.
-  Keep scenario assertions here; reuse shared VM implementation and always schedule cleanup.
+- Compose pinned Hoverkraft VM actions for Linux guest tests. The Proxmox installer
+  runs directly in QEMU inside a disposable container on the runner, avoiding an
+  extra Lima layer. Keep scenario assertions here and always schedule cleanup.
 - Use `actions/github-script` for workflow scripting, matching the shared actions.
 - Run `make lint` after edits and the relevant disposable tests for behavior changes.
   Use synthetic data. Never execute a host-changing test on the developer workstation.
