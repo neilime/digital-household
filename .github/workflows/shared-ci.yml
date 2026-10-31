@@ -63,13 +63,13 @@ jobs:
         run: make proxmox-download proxmox-iso ANSWER="$E2E_DIRECTORY/answer.toml" OUTPUT="$E2E_DIRECTORY/autoinstall.iso"
       - name: Create disposable installation VM
         id: vm
-        uses: hoverkraft-tech/ci-github-iac/actions/vm/create@0ffd578e678e63c2934da87054c63b67b35b507b # Direct QEMU preview
+        uses: hoverkraft-tech/ci-github-iac/actions/vm/create@cb8070a000cec561c4c21bf9bcabbf5e369ff5e0 # Direct QEMU preview
         with:
           backend: qemu
           vm-config: ${{ steps.fixture.outputs.directory }}/vm.json
           startup-timeout-minutes: 20
       - name: Test installed Proxmox
-        uses: hoverkraft-tech/ci-github-iac/actions/vm/test@0ffd578e678e63c2934da87054c63b67b35b507b # Direct QEMU preview
+        uses: hoverkraft-tech/ci-github-iac/actions/vm/test@cb8070a000cec561c4c21bf9bcabbf5e369ff5e0 # Direct QEMU preview
         env:
           E2E_DIRECTORY: ${{ steps.fixture.outputs.directory }}
         with:
@@ -81,7 +81,7 @@ jobs:
           report-name: digital-household - Proxmox installation
       - name: Destroy disposable installation VM
         if: ${{ always() && steps.vm.outputs.vm != '' }}
-        uses: hoverkraft-tech/ci-github-iac/actions/vm/destroy@0ffd578e678e63c2934da87054c63b67b35b507b # Direct QEMU preview
+        uses: hoverkraft-tech/ci-github-iac/actions/vm/destroy@cb8070a000cec561c4c21bf9bcabbf5e369ff5e0 # Direct QEMU preview
         with:
           vm: ${{ steps.vm.outputs.vm }}
       - name: Remove private installation inputs
