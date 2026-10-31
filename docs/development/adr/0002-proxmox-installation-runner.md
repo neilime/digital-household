@@ -2,7 +2,8 @@
 
 Date: 2026-10-30
 
-Status: Accepted. Hosted qualification is required before merging the implementation.
+Status: Direct-QEMU decision retained. Consumer lifecycle ownership superseded by
+[ADR 0003](0003-shared-qemu-actions.md).
 
 ## Context
 

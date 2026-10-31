@@ -1,11 +1,8 @@
 """Install the real ISO on a disposable disk and validate the installed host."""
 
-import ipaddress
 import json
 import os
 import re
-import shutil
-import socket
 import subprocess
 import tempfile
 import time
@@ -16,34 +13,13 @@ import pytest
 
 
 class ProxmoxGuest:
-    """Own only the QEMU process and files created for this test."""
+    """Assert the installed platform through the shared VM action's SSH configuration."""
 
     def __init__(self, directory: Path):
         self.directory = directory
-        self.source = Path.cwd()
-        self.answer = tomllib.loads((self.source / "answer.toml").read_text())
-        self.process = None
-        self.log = None
-        self.ssh_options = [
-            "-i",
-            str(self.source / "key"),
-            "-p",
-            "2222",
-            "-o",
-            "BatchMode=yes",
-            "-o",
-            "IdentitiesOnly=yes",
-            "-o",
-            "PasswordAuthentication=no",
-            "-o",
-            "KbdInteractiveAuthentication=no",
-            "-o",
-            "ConnectTimeout=5",
-            "-o",
-            "StrictHostKeyChecking=yes",
-            "-o",
-            f"UserKnownHostsFile={directory}/known_hosts",
-        ]
+        self.answer = tomllib.loads(Path(os.environ["E2E_DIRECTORY"], "answer.toml").read_text(encoding="utf-8"))
+        self.ssh_config = os.environ["VM_SSH_CONFIG"]
+        self.ssh_options = ["-F", self.ssh_config]
 
     @staticmethod
     def run(args, timeout=60):
@@ -55,139 +31,20 @@ class ProxmoxGuest:
 
     def command(self, command, timeout=60):
         """Execute assertions through the test-only loopback SSH endpoint."""
-        return self.run(["ssh", *self.ssh_options, "root@127.0.0.1", command], timeout)
+        return self.run(["ssh", *self.ssh_options, "iac-test", command], timeout)
 
-    def install(self):
-        """Boot the prepared UEFI ISO and require installer power-off."""
-        disk = self.directory / "system.raw"
-        self.run(["qemu-img", "create", "-f", "raw", str(disk), "32G"])
-        shutil.copyfile("/usr/share/OVMF/OVMF_VARS_4M.fd", self.directory / "uefi.fd")
-        network = self.answer["network"]
-        address = ipaddress.ip_interface(network["cidr"])
-        mac = ":".join(re.findall("..", network["filter"]["ID_NET_NAME_MAC"][3:]))
-        serial = self.answer["disk-setup"]["filter"]["ID_SERIAL"]
-        arguments = [
-            "qemu-system-x86_64",
-            "-machine",
-            "q35,accel=kvm",
-            "-cpu",
-            "host",
-            "-smp",
-            "2",
-            "-m",
-            "4096",
-            "-display",
-            "none",
-            "-qmp",
-            f"unix:{self.directory}/qmp.sock,server=on,wait=off",
-            "-drive",
-            "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd",
-            "-drive",
-            f"if=pflash,format=raw,file={self.directory}/uefi.fd",
-            "-drive",
-            f"if=none,id=system,format=raw,cache=none,file={disk}",
-            "-device",
-            f"virtio-blk-pci,drive=system,serial={serial}",
-            "-netdev",
-            (
-                f"user,id=lan,net={address.network},host={network['gateway']},"
-                f"dns={network['dns']},dhcpstart={address.ip},"
-                f"hostfwd=tcp:127.0.0.1:2222-{address.ip}:22"
-            ),
-            "-device",
-            f"virtio-net-pci,netdev=lan,mac={mac}",
-            "-serial",
-            f"file:{self.directory}/serial.log",
-        ]
-        self.log = (self.directory / "qemu.log").open("w", encoding="utf-8")
-        # This instance only sees a new regular file, never a host block device.
-        # pylint: disable=consider-using-with
-        self.process = subprocess.Popen(
-            [
-                *arguments,
-                "-cdrom",
-                str(self.source / "autoinstall.iso"),
-                "-boot",
-                "order=d",
-            ],
-            stdout=self.log,
-            stderr=self.log,
-        )
-        deadline = time.monotonic() + 900
-        progress = []
-        while time.monotonic() < deadline:
-            try:
-                status = self.process.wait(timeout=min(300, deadline - time.monotonic()))
-            except subprocess.TimeoutExpired:
-                if time.monotonic() < deadline:
-                    progress.append(self.diagnose(capture_console=False))
-            else:
-                assert status == 0, "Installer did not power off successfully"
-                break
-        else:
-            progress.append(self.diagnose())
-            raise TimeoutError(f"Installer exceeded 15 minutes: {json.dumps(progress)}")
-        self.process = subprocess.Popen(
-            [*arguments, "-boot", "order=c"],
-            stdout=self.log,
-            stderr=self.log,
-        )
-        # Trust on first use is limited to this owned, isolated loopback QEMU endpoint.
-        self.wait_for_ssh(first_boot=True)
-
-    @staticmethod
-    def qmp_command(stream, name, arguments=None):
-        """Read a bounded QMP reply while ignoring asynchronous VM events."""
-        payload = {"execute": name, "arguments": arguments or {}}
-        stream.write(json.dumps(payload).encode() + b"\n")
-        for _ in range(20):
-            result = json.loads(stream.readline())
-            if "error" in result:
-                raise RuntimeError("QMP diagnostic command failed")
-            if "return" in result:
-                return result["return"]
-        raise RuntimeError("QMP diagnostic response missing")
-
-    def diagnose(self, capture_console=True):
-        """Record disk activity and optionally the console of this synthetic installation."""
-        diagnostic = {"free_disk_gib": shutil.disk_usage(self.source).free // 2**30}
-        try:
-            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
-                client.settimeout(5)
-                client.connect(str(self.directory / "qmp.sock"))
-                with client.makefile("rwb", buffering=0) as stream:
-                    json.loads(stream.readline())
-
-                    self.qmp_command(stream, "qmp_capabilities")
-                    diagnostic["state"] = self.qmp_command(stream, "query-status")
-                    blocks = self.qmp_command(stream, "query-block")
-                    diagnostic["disk_io"] = [item.get("io-status") for item in blocks]
-                    stats = self.qmp_command(stream, "query-blockstats")
-                    diagnostic["written_bytes"] = sum(item["stats"]["wr_bytes"] for item in stats)
-                    if capture_console:
-                        output = self.source / "diagnostics"
-                        output.mkdir(mode=0o700, exist_ok=True)
-                        arguments = {"filename": str(output / "installer.png"), "format": "png"}
-                        self.qmp_command(stream, "screendump", arguments)
-        except (OSError, ValueError, RuntimeError) as error:
-            diagnostic["capture_error"] = type(error).__name__
-        return diagnostic
-
-    def wait_for_ssh(self, first_boot=False, previous_boot=None):
-        """Require a running QEMU and a new boot ID when verifying a reboot."""
+    def wait_for_ssh(self, previous_boot=None):
+        """Require platform readiness and a new boot ID when verifying a reboot."""
         deadline = time.monotonic() + 300
         readiness = "for service in pve-cluster pvedaemon pveproxy; do "
         readiness += 'systemctl is-active --quiet "$service" || exit 1; done; '
         readiness += "cat /proc/sys/kernel/random/boot_id"
         while time.monotonic() < deadline:
-            assert self.process.poll() is None, "Installed Proxmox VM exited unexpectedly"
-            options = ["-o", "StrictHostKeyChecking=accept-new"] if first_boot else []
             result = subprocess.run(
                 [
                     "ssh",
-                    *options,
                     *self.ssh_options,
-                    "root@127.0.0.1",
+                    "iac-test",
                     readiness,
                 ],
                 capture_output=True,
@@ -203,18 +60,15 @@ class ProxmoxGuest:
     def baseline(self, check=False):
         """Exercise the deployment playbook, including its actual target preflight."""
         inventory = self.directory / "inventory.json"
-        known_hosts = self.directory / "known_hosts"
-        ssh_args = f"-o UserKnownHostsFile={known_hosts} -o IdentitiesOnly=yes"
+        ssh_args = f"-F {self.ssh_config}"
         inventory.write_text(
             json.dumps(
                 {
                     "proxmox": {
                         "hosts": {
                             "installed": {
-                                "ansible_host": "127.0.0.1",
-                                "ansible_port": 2222,
+                                "ansible_host": "iac-test",
                                 "ansible_user": "root",
-                                "ansible_ssh_private_key_file": str(self.source / "key"),
                                 "ansible_ssh_common_args": ssh_args,
                                 "proxmox_expected_fqdn": self.answer["global"]["fqdn"],
                                 "proxmox_repository_channel": "no-subscription",
@@ -235,36 +89,19 @@ class ProxmoxGuest:
             timeout=180,
         )
 
-    def close(self):
-        """Stop our child process, including after installer timeout or assertion failure."""
-        try:
-            if self.process is not None and self.process.poll() is None:
-                self.process.terminate()
-                try:
-                    self.process.wait(timeout=15)
-                except subprocess.TimeoutExpired:
-                    self.process.kill()
-                    self.process.wait(timeout=15)
-            assert self.process is None or self.process.poll() is not None, "QEMU cleanup failed"
-        finally:
-            if self.log is not None:
-                self.log.close()
-
 
 @pytest.fixture(scope="module", name="guest")
 def installed_guest():
-    """Allocate a private QEMU guest only inside the disposable test container."""
-    assert Path("/etc/digital-household-disposable-test").is_file()
-    assert os.access("/dev/kvm", os.R_OK | os.W_OK), "KVM is required"
-    filesystem = ProxmoxGuest.run(["findmnt", "-n", "-o", "FSTYPE", "--target", str(Path.cwd())])
-    assert filesystem not in ("tmpfs", "ramfs"), "VM disks require disk-backed storage"
-    with tempfile.TemporaryDirectory(prefix="proxmox-install-", dir=Path.cwd()) as directory:
+    """Use only the disposable guest explicitly supplied by the shared VM actions."""
+    config = Path(os.environ["VM_SSH_CONFIG"])
+    runtime = Path(os.environ["VM_DIRECTORY"])
+    assert runtime.parent == Path("/var/tmp")
+    assert runtime.name.startswith(f"iac-qemu-{os.getuid()}-")
+    assert config == runtime / "ssh.config" and config.is_file()
+    with tempfile.TemporaryDirectory(prefix="proxmox-assertions-") as directory:
         machine = ProxmoxGuest(Path(directory))
-        try:
-            machine.install()
-            yield machine
-        finally:
-            machine.close()
+        machine.wait_for_ssh()
+        yield machine
 
 
 def test_installed_platform_storage_and_management(guest):

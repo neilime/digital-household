@@ -28,6 +28,26 @@ exports.prepare = ({ core }) => {
 		.replace(/^root-ssh-keys = .*$/m, `root-ssh-keys = ["${key}"]`)
 		.replace(/^dns = .*$/m, 'dns = "192.0.2.2"')
 		.replace(/^filter.ID_SERIAL = .*$/m, 'filter.ID_SERIAL = "PVE_E2E_DISK"');
+	const relative = path.relative(process.cwd(), directory);
+	const config = {
+		cpus: 2,
+		memoryMiB: 4096,
+		diskGiB: 32,
+		diskSerial: "PVE_E2E_DISK",
+		iso: `${relative}/autoinstall.iso`,
+		network: {
+			subnet: "192.0.2.0/24",
+			address: "192.0.2.10",
+			gateway: "192.0.2.1",
+			dns: "192.0.2.2",
+			mac: "02:00:00:00:00:01",
+		},
+		ssh: { user: "root", privateKey: `${relative}/key` },
+	};
+	fs.writeFileSync(`${directory}/vm.json`, JSON.stringify(config), {
+		mode: 0o600,
+		flag: "wx",
+	});
 	fs.writeFileSync(`${directory}/answer.toml`, answer, {
 		mode: 0o600,
 		flag: "wx",
@@ -45,77 +65,6 @@ function fixtureDirectory() {
 	return directory;
 }
 
-async function stage(exec, directory) {
-	// Copy an explicit allowlist. Never mount the checkout or copy private local inventory.
-	const files = execFileSync("git", [
-		"ls-files",
-		"--cached",
-		"--others",
-		"--exclude-standard",
-		"-z",
-		"--",
-		"ansible",
-		"proxmox",
-		"scripts/proxmox_installer.py",
-		"tests/proxmox",
-		"docker/tooling/requirements.txt",
-	]);
-	await exec.exec(
-		"tar",
-		["-cf", `${directory}/source.tar`, "--null", "-T", "-"],
-		{
-			input: files,
-		},
-	);
-	await exec.exec("tar", ["-xf", `${directory}/source.tar`, "-C", directory]);
-	fs.unlinkSync(`${directory}/source.tar`);
-}
-
-exports.run = async ({ exec, core }) => {
-	const directory = fixtureDirectory();
-	const kvm = fs.statSync("/dev/kvm");
-	if (!kvm.isCharacterDevice())
-		throw new Error("A KVM-capable runner is required");
-	await stage(exec, directory);
-	try {
-		await exec.exec("docker", [
-			"run",
-			"--name",
-			path.basename(directory),
-			"--init",
-			"--device=/dev/kvm",
-			"--group-add",
-			String(kvm.gid),
-			"--user",
-			`${process.getuid()}:${process.getgid()}`,
-			"--cap-drop=ALL",
-			"--security-opt=no-new-privileges",
-			"--mount",
-			`type=bind,src=${directory},dst=/var/tmp/proxmox-e2e`,
-			"digital-household-proxmox-test:local",
-		]);
-	} finally {
-		for (const [output, file] of Object.entries({
-			report: "reports/proxmox.xml",
-			console: "diagnostics/installer.png",
-		})) {
-			const filename = path.join(directory, file);
-			if (fs.existsSync(filename)) core.setOutput(output, filename);
-		}
-	}
-};
-
-exports.cleanup = async ({ exec }) => {
-	const directory = fixtureDirectory();
-	const name = path.basename(directory);
-	const { stdout } = await exec.getExecOutput("docker", [
-		"container",
-		"ls",
-		"--all",
-		"--filter",
-		`name=^/${name}$`,
-		"--format={{.ID}}",
-	]);
-	if (stdout.trim()) await exec.exec("docker", ["rm", "--force", name]);
-	fs.rmSync(directory, { recursive: true, force: true });
+exports.cleanup = () => {
+	fs.rmSync(fixtureDirectory(), { recursive: true, force: true });
 };

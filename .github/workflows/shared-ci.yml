@@ -57,55 +57,37 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: require('./.github/scripts/proxmox-e2e.cjs').prepare({ core });
-      - name: Build verified unattended ISO and test container
+      - name: Build verified unattended ISO
         env:
           E2E_DIRECTORY: ${{ steps.fixture.outputs.directory }}
-        run: make proxmox-download proxmox-iso setup-e2e ANSWER="$E2E_DIRECTORY/answer.toml" OUTPUT="$E2E_DIRECTORY/autoinstall.iso"
-      - name: Execute installation assertions
-        id: test
-        timeout-minutes: 40
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        run: make proxmox-download proxmox-iso ANSWER="$E2E_DIRECTORY/answer.toml" OUTPUT="$E2E_DIRECTORY/autoinstall.iso"
+      - name: Create disposable installation VM
+        id: vm
+        uses: hoverkraft-tech/ci-github-iac/actions/vm/create@0ffd578e678e63c2934da87054c63b67b35b507b # Direct QEMU preview
+        with:
+          backend: qemu
+          vm-config: ${{ steps.fixture.outputs.directory }}/vm.json
+          startup-timeout-minutes: 20
+      - name: Test installed Proxmox
+        uses: hoverkraft-tech/ci-github-iac/actions/vm/test@0ffd578e678e63c2934da87054c63b67b35b507b # Direct QEMU preview
         env:
           E2E_DIRECTORY: ${{ steps.fixture.outputs.directory }}
         with:
-          script: await require('./.github/scripts/proxmox-e2e.cjs').run({ exec, core });
-      - name: Parse installation reports
-        if: ${{ always() && steps.test.outputs.report != '' }}
-        id: reports
-        uses: hoverkraft-tech/ci-github-common/actions/parse-ci-reports@44f6108cef0e9884ea7735f3d62932c2310745d4 # 0.39.1
-        with:
+          vm: ${{ steps.vm.outputs.vm }}
+          execution: runner
+          test-script: tests/proxmox/run.sh
+          test-timeout-minutes: 20
+          report-file: proxmox.xml
           report-name: digital-household - Proxmox installation
-          report-paths: ${{ steps.test.outputs.report }}
-          output-format: summary,markdown,annotations
-      - name: Update installation PR comment
-        if: >-
-          ${{ always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' && steps.reports.outputs.markdown != '' }}
-        uses: hoverkraft-tech/ci-github-common/actions/create-or-update-comment@44f6108cef0e9884ea7735f3d62932c2310745d4 # 0.39.1
+      - name: Destroy disposable installation VM
+        if: ${{ always() && steps.vm.outputs.vm != '' }}
+        uses: hoverkraft-tech/ci-github-iac/actions/vm/destroy@0ffd578e678e63c2934da87054c63b67b35b507b # Direct QEMU preview
         with:
-          title: digital-household - Proxmox installation
-          body: ${{ steps.reports.outputs.markdown }}
-      - name: Upload installation report
-        if: ${{ always() && steps.test.outputs.report != '' }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: proxmox-installation-report
-          path: ${{ steps.test.outputs.report }}
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 7
-      - name: Upload synthetic installer console
-        if: ${{ failure() && steps.test.outputs.console != '' }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: proxmox-installer-console
-          path: ${{ steps.test.outputs.console }}
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 1
-      - name: Remove test container and private installation inputs
+          vm: ${{ steps.vm.outputs.vm }}
+      - name: Remove private installation inputs
         if: ${{ always() && steps.fixture.outputs.directory != '' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           E2E_DIRECTORY: ${{ steps.fixture.outputs.directory }}
         with:
-          script: await require('./.github/scripts/proxmox-e2e.cjs').cleanup({ exec });
+          script: require('./.github/scripts/proxmox-e2e.cjs').cleanup();

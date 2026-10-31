@@ -18,30 +18,23 @@ separate from the installation end-to-end results below.
 The installation end-to-end test runs on GitHub-hosted Linux runners through
 [the shared CI job](../../.github/workflows/shared-ci.yml). Pull requests and
 main pushes run it automatically; the main workflow also supports manual runs.
-The job requires `/dev/kvm`, Docker and disk-backed checkout storage.
+The job requires KVM, Docker for ISO preparation and sufficient disk-backed storage.
 
-The job builds the checksum-verified Proxmox ISO using the existing tooling and
-synthetic answer fixture. Each run generates a temporary SSH key and password
-hash. The adjacent GitHub Script module stages an explicit source allowlist and
-runs the `proxmox-test` stage of the [tooling Dockerfile](../../docker/tooling/Dockerfile).
-Ignored private inventory and the host checkout are excluded from the container.
+The job builds the checksum-verified Proxmox ISO with synthetic installation
+settings, a temporary SSH key and password hash. The adjacent GitHub Script module
+prepares only these inputs and a JSON VM configuration.
 
-The container runs as the runner's UID/GID, with access to `/dev/kvm` and the
-private fixture directory only. It has no Docker socket, host networking,
-published ports or privileged mode. The test's SSH forwarding binds to loopback
-inside the container. Initial host-key trust is restricted to that owned endpoint;
-later connections enforce the recorded key. QEMU runs on the runner's kernel;
-there is no intermediate Lima VM.
+The shared `vm/create` action boots QEMU directly on the runner with UEFI, two
+vCPUs, 4 GiB RAM and a private 32 GiB raw disk. Its QEMU backend waits for installer
+power-off, boots the disk without the ISO and waits for SSH. A 20-minute startup
+budget covers this sequence. No host block device is attached.
 
-[The installation tests](../../tests/proxmox/test_installation.py) use KVM, UEFI,
-two vCPUs, 4 GiB RAM and a new 32 GiB sparse raw disk. The disk and installation
-inputs live on the runner's checkout filesystem, mounted at `/var/tmp/proxmox-e2e`.
-The tests reject RAM-backed storage and fail if KVM is unavailable. Direct I/O
-bypasses the file cache while honoring guest flush requests. No host block device
-is attached to QEMU.
-
-The installer has a 15-minute deadline within a 40-minute test step. Five-minute
-samples record VM state, disk writes and free space for timeout diagnosis.
+The shared `vm/test` action executes [the test script](../../tests/proxmox/run.sh)
+on the runner with another 20-minute budget. The script installs pinned pytest and
+Ansible requirements into a temporary virtual environment, then targets only the
+shared action's private loopback SSH endpoint. Initial host-key trust is limited
+to that owned endpoint; subsequent connections enforce the recorded key.
+There is no intermediate Lima guest or consumer-owned QEMU process.
 
 The tests verify:
 
@@ -52,18 +45,16 @@ The tests verify:
 - Reapplication and check mode report no changes; Debian package sources are preserved.
 - Package indices refresh successfully and key-only SSH persists after reboot.
 
-[The container entrypoint](../../tests/proxmox/run.sh) writes native pytest JUnit
-into `reports/proxmox.xml` under the private fixture directory. Pinned Hoverkraft
-reporting actions publish summaries, annotations and a distinct installation PR
-comment. Fork and Dependabot PRs skip comments. Completed JUnit is uploaded even
-when tests or reporting fail, with seven-day retention. An installer timeout also
-produces a synthetic console image, uploaded separately for one day. Uploads
-select these exact files; raw VM logs, disks, keys and prepared media stay private.
+The shared test action collects native pytest JUnit from `REPORTS_DIR/proxmox.xml`,
+publishes summaries and annotations, updates the installation PR comment and
+uploads completed reports even after test failure. Fork and Dependabot runs skip
+comments. Reports have seven-day retention; runtime directories, logs, keys and
+prepared media remain private.
 
-The fixture stops its QEMU child after success or failure. An `always()` workflow
-step removes the invocation's container, including any remaining processes,
-before deleting its private inputs and disk. Cleanup failures fail the job.
-Forced runner termination is bounded by hosted-runner disposal.
+An `always()` step calls `vm/destroy`, which verifies process ownership and
+termination before deleting the private disk and keys. A final consumer step
+removes its synthetic installation inputs. Cleanup failures fail the job;
+forced runner termination is bounded by hosted-runner disposal.
 
 These checks qualify the virtual installation path. Physical disk/NIC compatibility,
 target-console approval, Home Assistant boot, radio devices and recovery remain

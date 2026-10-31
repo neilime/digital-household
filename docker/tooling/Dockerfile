@@ -31,20 +31,3 @@ WORKDIR /workspace
 USER ${UID}:${GID}
 HEALTHCHECK --interval=5m --timeout=10s CMD ["proxmox-auto-install-assistant", "--version"]
 CMD ["bash"]
-
-FROM tooling AS proxmox-test
-USER root
-# QEMU and firmware follow Debian's supported package updates.
-# hadolint ignore=DL3008
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ovmf qemu-system-x86 qemu-utils && \
-    rm -rf /var/lib/apt/lists/* && \
-    touch /etc/digital-household-disposable-test
-COPY tests/proxmox/requirements.txt /opt/tooling/test-requirements.txt
-RUN pip install --no-cache-dir -r /opt/tooling/test-requirements.txt
-COPY tests/proxmox/run.sh /opt/tooling/test-installation.sh
-ENV ANSIBLE_CONFIG=/var/tmp/proxmox-e2e/ansible/ansible.cfg \
-    REPORTS_DIR=/var/tmp/proxmox-e2e/reports
-WORKDIR /var/tmp/proxmox-e2e
-USER ${UID}:${GID}
-CMD ["bash", "/opt/tooling/test-installation.sh"]
