@@ -17,7 +17,9 @@ class ProxmoxGuest:
 
     def __init__(self, directory: Path):
         self.directory = directory
-        self.answer = tomllib.loads(Path(os.environ["E2E_DIRECTORY"], "answer.toml").read_text(encoding="utf-8"))
+        self.answer = tomllib.loads(
+            Path(os.environ["E2E_DIRECTORY"], "answer.toml").read_text(encoding="utf-8")
+        )
         self.ssh_config = os.environ["VM_SSH_CONFIG"]
         self.ssh_options = ["-F", self.ssh_config]
 
