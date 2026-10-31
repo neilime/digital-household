@@ -11,43 +11,54 @@ Debian container, checks effective SSH configuration, preserves Debian APT
 sources, verifies both Proxmox channels and checks an unchanged preview.
 These host-changing tests must never run directly on the workstation.
 
-CI runs both commands in its bootstrap job. They do not boot a Proxmox ISO or
-exercise production preflight against a real Proxmox host. For installer changes,
-also prepare an ISO locally using the synthetic answer fixture copied with mode
-600 into `.local/`. Inspect it with the native `inspect-iso` command. Do not use
-that fixture on real hardware, and do not upload prepared ISOs.
+The bootstrap CI job runs the installer unit tests and the same container
+assertions through the shared Ansible test action. Its native JUnit reports are
+separate from the installation end-to-end results below.
 
-VM validation runs on GitHub-hosted Linux runners through
+The installation end-to-end test runs on GitHub-hosted Linux runners through
 [the shared CI job](../../.github/workflows/shared-ci.yml). Pull requests and
 main pushes run it automatically; the main workflow also supports manual runs.
-The job composes the pinned `vm/create`, `vm/test` and `vm/destroy` actions,
-using [our assertions](../../tests/e2e.sh). Keep all three actions on the same
-immutable revision. The creation action installs Lima and QEMU on the runner.
+The job requires KVM, Docker for ISO preparation and sufficient disk-backed storage.
 
-`vm/test` parses results, renders summaries and annotations, updates a PR comment
-and uploads completed reports. Its stable `report-name` keeps comments distinct;
-fork and Dependabot PRs skip comments. The parser manages its own dependencies.
-The workflow grants `pull-requests: write`
-and schedules destruction with `always()`, including after reporting failure.
-Use `command` instead of `test-script` for inline guest commands. Optional
-`coverage: codecov` requires explicit report selection and `id-token: write`.
+The job builds the checksum-verified Proxmox ISO with synthetic installation
+settings, a temporary SSH key and password hash. The adjacent GitHub Script module
+prepares only these inputs and a JSON VM configuration.
 
-The assertions validate a cold Ubuntu boot and synthetic guest read/write behavior.
-They do not validate a production service or nested Proxmox. The repository owns
-[the Lima configuration](../../tests/lima.yml), including the pinned Ubuntu image
-and guest resources. CI passes it through the required `vm-config` input.
+The shared `vm/create` action boots QEMU directly on the runner with UEFI, two
+vCPUs, 4 GiB RAM and a private 32 GiB raw disk. Its QEMU backend waits for installer
+power-off, boots the disk without the ISO and waits for SSH. A 20-minute startup
+budget covers this sequence. No host block device is attached.
 
-Each invocation uses its own short private Lima runtime under `/tmp`, removed
-with its keys after verified teardown. Each test keeps its own sanitized report.
-CI uses the report path returned by the action from runner temp.
-To collect reports from test tools, set `report-file` patterns on the test action and write
-those files into the supplied guest `REPORTS_DIR`. The parser consumes the
-`report-files` output when present, otherwise the command-status `report`.
-Collected report contents must be suitable for these public workflows.
-For input options and cleanup recovery, see the generated action documentation:
-[create](https://github.com/hoverkraft-tech/ci-github-iac/blob/0.2.0/actions/vm/create/README.md),
-[test](https://github.com/hoverkraft-tech/ci-github-iac/blob/0.2.0/actions/vm/test/README.md) and
-[destroy](https://github.com/hoverkraft-tech/ci-github-iac/blob/0.2.0/actions/vm/destroy/README.md).
+The shared `vm/test` action executes [the test script](../../tests/proxmox/run.sh)
+on the runner with another 20-minute budget. The script installs pinned pytest and
+Ansible requirements into a temporary virtual environment, then targets only the
+shared action's private loopback SSH endpoint. Initial host-key trust is limited
+to that owned endpoint; subsequent connections enforce the recorded key.
+There is no intermediate Lima guest or consumer-owned QEMU process.
+
+The tests verify:
+
+- Unattended installation powers off and the installed disk boots without the ISO.
+- Proxmox kernel, UEFI boot, disk storage, management services and web UI work.
+- The disk serial, static management bridge, route and hostname match the answer; DNS lookup works.
+- The actual deployment playbook passes its target checks and applies the baseline.
+- Reapplication and check mode report no changes; Debian package sources are preserved.
+- Package indices refresh successfully and key-only SSH persists after reboot.
+
+The shared test action collects native pytest JUnit from `REPORTS_DIR/proxmox.xml`,
+publishes summaries and annotations, updates the installation PR comment and
+uploads completed reports even after test failure. Fork and Dependabot runs skip
+comments. Reports have seven-day retention; runtime directories, logs, keys and
+prepared media remain private.
+
+An `always()` step calls `vm/destroy`, which verifies process ownership and
+termination before deleting the private disk and keys. A final consumer step
+removes its synthetic installation inputs. Cleanup failures fail the job;
+forced runner termination is bounded by hosted-runner disposal.
+
+These checks qualify the virtual installation path. Physical disk/NIC compatibility,
+target-console approval, Home Assistant boot, radio devices and recovery remain
+separate acceptance tasks. Never boot the synthetic media on physical hardware.
 
 `make plan`, `provision`, `configure`, `deploy`, `verify` and `backup` fail with an
 explicit message until their implementations are delivered. These commands never

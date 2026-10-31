@@ -17,18 +17,25 @@ playbook reuses the same disposable-container assertions and publishes native
 JUnit reports. Ansible Lint stays in the separate linter job.
 VM integration tests run in CI; see the
 [validation guide](docs/usage/validation.md) for scenarios and reporting.
+The Proxmox end-to-end job composes shared VM actions with the direct-QEMU backend,
+then validates the installed guest with pytest running on the runner. Keep the pytest pin in
+`tests/proxmox/requirements.txt`; Dependabot updates it with the tooling Python
+requirements. Keep workflow scripting in adjacent GitHub Script modules.
 
 `main-ci.yml` and `pull-request-ci.yml` call `shared-ci.yml`. Main supports
 pushes and manual runs; PR CI also supports merge queues. Both cancel superseded
 runs for the same workflow and ref. Start workflows with `permissions: {}` and
 grant only the permissions required by each job. Keep step names descriptive and
-Actions pinned. Compose shared VM operations in the job, and review each job's
+Actions pinned. Shared VM actions own startup, test execution, reporting and
+cleanup for both Lima and direct-QEMU scenarios. Review each job's
 result before merging.
 
-Use Conventional Commits and reviewed pull requests. Pin all three VM actions
-to the same immutable revision in `shared-ci.yml`. Update those references
-together when adopting a shared CI change, then require the hosted VM job to pass
-before merging.
+Use Conventional Commits and reviewed pull requests. When composing the shared
+VM actions, pin creation, testing and destruction to the same immutable revision.
+Require the hosted installation job to pass before merging installer changes.
+`make setup` builds the pinned tooling container for ISO preparation. The shared
+actions install QEMU; the runner-side test script prepares its temporary Python
+environment. Host-changing assertions must target only the disposable guest.
 
 ## Repository automation
 

@@ -33,7 +33,7 @@ ci: ## Execute local CI tasks
 	$(MAKE) test-baseline
 
 setup: ## Build the pinned Proxmox and Ansible tooling container
-	docker build --platform=linux/amd64 --file docker/tooling/Dockerfile \
+	docker build --platform=linux/amd64 --file docker/tooling/Dockerfile --target tooling \
 		--build-arg UID=$(HOST_UID) --build-arg GID=$(HOST_GID) --tag "$(TOOLING_IMAGE)" .
 
 test: test-unit check-ansible ## Validate installer safety checks, native answers and Ansible syntax
