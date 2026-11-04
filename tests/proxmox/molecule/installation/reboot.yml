@@ -1,0 +1,8 @@
+---
+- name: Verify persistence through a Proxmox reboot
+  hosts: proxmox
+  gather_facts: false
+  tasks:
+    - name: Reboot and require a new boot identity
+      ansible.builtin.reboot:
+        reboot_timeout: 300

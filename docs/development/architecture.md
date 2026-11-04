@@ -21,9 +21,11 @@ A PR author cannot approve their own PR; another eligible reviewer is required.
 
 Dependencies are pinned to immutable Action commits, Docker digests and tooling
 versions. See [update ownership](../../CONTRIBUTING.md#repository-automation).
-Pin all VM actions to the same shared revision. Workflows compose shared operations
-and own cleanup conditions. The test action owns report parsing and publication. Review
-shared CI updates with a complete VM lifecycle before merging.
+Workflows compose shared Ansible validation and report publication, and own cleanup
+conditions. Linux guest scenarios use the shared VM lifecycle actions at one
+revision. The Proxmox installation scenario runs QEMU in a disposable container
+with KVM access; see [ADR 0002](adr/0002-proxmox-installation-runner.md). Review
+shared CI updates with the affected scenarios before merging.
 
 The bootstrap targets compatible hosts without depending on a manufacturer or
 machine model. Disk and NIC identity, network settings and hostname belong in

@@ -1,0 +1,65 @@
+file:
+  /sys/firmware/efi:
+    exists: true
+    filetype: directory
+command:
+  nested-kvm:
+    exec: test -c /dev/kvm
+    exit-status: 0
+  release:
+    exec: pveversion
+    exit-status: 0
+    stdout:
+      - '/^pve-manager\/{{ .Vars.major }}[.]/'
+  kernel:
+    exec: uname -r
+    exit-status: 0
+    stdout:
+      - /-pve$/
+  root-filesystem:
+    exec: findmnt -n -o FSTYPE /
+    exit-status: 0
+    stdout:
+      - /^ext4$/
+  installation-disk:
+    exec: lsblk -dn -o SERIAL /dev/vda
+    exit-status: 0
+    stdout:
+      - "{{ .Vars.disk_serial }}"
+  storage:
+    exec: pvesm status
+    exit-status: 0
+    stdout:
+      - '/local\s+dir\s+active/'
+      - '/local-lvm\s+lvmthin\s+active/'
+  hostname:
+    exec: hostname -f
+    exit-status: 0
+    stdout:
+      - "{{ .Vars.fqdn }}"
+  bridge:
+    exec: ip -4 -o addr show dev vmbr0
+    exit-status: 0
+    stdout:
+      - "{{ .Vars.cidr }}"
+  route:
+    exec: ip -4 route show default
+    exit-status: 0
+    stdout:
+      - "via {{ .Vars.gateway }}"
+  dns:
+    exec: getent hosts download.proxmox.com
+    exit-status: 0
+service:
+  pve-cluster:
+    running: true
+  pvedaemon:
+    running: true
+  pveproxy:
+    running: true
+http:
+  https://127.0.0.1:8006/:
+    status: 200
+    allow-insecure: true
+    body:
+      - Proxmox

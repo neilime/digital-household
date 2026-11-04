@@ -1,0 +1,7 @@
+---
+- name: Apply the actual Proxmox baseline
+  ansible.builtin.import_playbook: ../../../../ansible/proxmox.yml
+  vars:
+    ansible_user: root
+    proxmox_expected_fqdn: "{{ fqdn }}"
+    proxmox_repository_channel: no-subscription

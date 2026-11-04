@@ -34,15 +34,16 @@ jobs:
       - name: Validate installer inputs
         run: make test-unit TOOLING_IMAGE="$TOOLING_IMAGE"
       - name: Test Ansible
-        uses: hoverkraft-tech/ci-github-iac/actions/ansible/test@5c4b7307d7a2c58a01a3b62607cebde65f96b0a2 # 0.2.0
+        uses: hoverkraft-tech/ci-github-iac/actions/ansible/test@89e3bf93adc94b592188e714f61d4abc391aab46 # 1.0.0
         with:
           ansible-requirements: docker/tooling/requirements.txt
           ansible-config: ansible/ansible.cfg
           test-playbook: tests/proxmox-test.yml
           report-name: digital-household - Ansible tests
-  vm:
+  installation:
+    name: Proxmox installation E2E
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 60
     permissions:
       contents: read
       pull-requests: write
@@ -51,20 +52,49 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Create VM
+      - name: Prepare synthetic installation identity
+        id: fixture
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: await require('./.github/scripts/proxmox-e2e.cjs').prepare({ core, exec, io });
+      - name: Build verified unattended ISO
+        env:
+          E2E_DIRECTORY: ${{ steps.fixture.outputs.directory }}
+        run: make proxmox-download proxmox-iso ANSWER="$E2E_DIRECTORY/answer.toml" OUTPUT="$E2E_DIRECTORY/autoinstall.iso"
+      - name: Create disposable installation VM
         id: vm
-        uses: hoverkraft-tech/ci-github-iac/actions/vm/create@5c4b7307d7a2c58a01a3b62607cebde65f96b0a2 # 0.2.0
+        uses: hoverkraft-tech/ci-github-iac/actions/vm/create@89e3bf93adc94b592188e714f61d4abc391aab46 # 1.0.0
         with:
-          vm-config: tests/lima.yml
-      - name: Execute guest assertions
-        id: test
-        uses: hoverkraft-tech/ci-github-iac/actions/vm/test@5c4b7307d7a2c58a01a3b62607cebde65f96b0a2 # 0.2.0
+          backend: qemu
+          vm-config: ${{ steps.fixture.outputs.directory }}/vm.json
+          startup-timeout-minutes: 20
+      - name: Test baseline deployment, idempotence and reboot
+        uses: hoverkraft-tech/ci-github-iac/actions/ansible/test-molecule@89e3bf93adc94b592188e714f61d4abc391aab46 # 1.0.0
+        env:
+          E2E_DIRECTORY: ${{ github.workspace }}/${{ steps.fixture.outputs.directory }}
+          VM_NAME: ${{ steps.vm.outputs.name }}
+          VM_SSH_CONFIG: ${{ steps.vm.outputs.ssh-config }}
+        with:
+          molecule-scenario: tests/proxmox/molecule/installation
+          ansible-requirements: docker/tooling/requirements.txt
+          ansible-config: ansible/ansible.cfg
+          report-name: digital-household - Proxmox baseline
+      - name: Verify the installed platform after reboot
+        uses: hoverkraft-tech/ci-github-iac/actions/vm/test@89e3bf93adc94b592188e714f61d4abc391aab46 # 1.0.0
         with:
           vm: ${{ steps.vm.outputs.vm }}
-          test-script: tests/e2e.sh
-          report-name: digital-household - VM tests
-      - name: Destroy VM
+          goss-file: tests/proxmox/goss.yaml
+          goss-vars: ${{ steps.fixture.outputs.directory }}/goss-vars.json
+          report-name: digital-household - Proxmox platform
+      - name: Destroy disposable installation VM
         if: ${{ always() && steps.vm.outputs.vm != '' }}
-        uses: hoverkraft-tech/ci-github-iac/actions/vm/destroy@5c4b7307d7a2c58a01a3b62607cebde65f96b0a2 # 0.2.0
+        uses: hoverkraft-tech/ci-github-iac/actions/vm/destroy@89e3bf93adc94b592188e714f61d4abc391aab46 # 1.0.0
         with:
           vm: ${{ steps.vm.outputs.vm }}
+      - name: Remove private installation inputs
+        if: ${{ always() && steps.fixture.outputs.directory != '' }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          E2E_DIRECTORY: ${{ steps.fixture.outputs.directory }}
+        with:
+          script: await require('./.github/scripts/proxmox-e2e.cjs').cleanup({ io });
