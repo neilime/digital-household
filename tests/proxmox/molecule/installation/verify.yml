@@ -1,0 +1,42 @@
+---
+- name: Verify baseline behavior and unmanaged data preservation
+  hosts: proxmox
+  gather_facts: false
+  tasks:
+    - name: Assert Debian sources remain unchanged
+      ansible.builtin.command: sha256sum --check /var/tmp/debian-sources.sha256
+      changed_when: false
+    - name: Read effective SSH settings
+      ansible.builtin.command: sshd -T
+      register: ssh_settings
+      changed_when: false
+    - name: Assert key-only administration
+      ansible.builtin.assert:
+        that:
+          - "'passwordauthentication no' in ssh_settings.stdout_lines"
+          - "'kbdinteractiveauthentication no' in ssh_settings.stdout_lines"
+          - "'permitrootlogin without-password' in ssh_settings.stdout_lines"
+    - name: Verify the configured repositories
+      ansible.builtin.command: apt-get update -o APT::Update::Error-Mode=any
+      changed_when: false
+    - name: Verify the management API after boot
+      # checkov:skip=CKV_ANSIBLE_1:Disposable guest uses its installer-generated certificate on loopback only.
+      ansible.builtin.uri:
+        url: https://127.0.0.1:8006/
+        validate_certs: false
+        return_content: true
+      register: management
+      until: management.status == 200
+      retries: 30
+      delay: 5
+    - name: Assert the Proxmox management page is served
+      ansible.builtin.assert:
+        that: "'Proxmox' in management.content"
+
+- name: Exercise the deployment preview
+  ansible.builtin.import_playbook: ../../../../ansible/proxmox.yml
+  check_mode: true
+  vars:
+    ansible_user: root
+    proxmox_expected_fqdn: "{{ fqdn }}"
+    proxmox_repository_channel: no-subscription

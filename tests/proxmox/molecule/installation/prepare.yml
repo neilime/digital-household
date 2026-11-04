@@ -1,0 +1,21 @@
+---
+- name: Preserve the unmanaged Debian repository configuration
+  hosts: proxmox
+  gather_facts: false
+  tasks:
+    - name: Wait for the installed platform
+      ansible.builtin.command: systemctl is-active pve-cluster pvedaemon pveproxy
+      register: platform
+      changed_when: false
+      until: platform.rc == 0
+      retries: 30
+      delay: 5
+    - name: Read the Debian sources checksum
+      ansible.builtin.command: sha256sum /etc/apt/sources.list.d/debian.sources
+      register: debian_sources
+      changed_when: false
+    - name: Keep the checksum across the test reboot
+      ansible.builtin.copy:
+        dest: /var/tmp/debian-sources.sha256
+        content: "{{ debian_sources.stdout }}\n"
+        mode: "0600"

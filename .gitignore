@@ -1,6 +1,8 @@
 .cache/
 .reports/
 .local/
+.mypy_cache/
+.pytest_cache/
 *.iso
 __pycache__/
 *.pyc

@@ -17,18 +17,27 @@ playbook reuses the same disposable-container assertions and publishes native
 JUnit reports. Ansible Lint stays in the separate linter job.
 VM integration tests run in CI; see the
 [validation guide](docs/usage/validation.md) for scenarios and reporting.
+The Proxmox end-to-end job composes shared VM actions with the direct-QEMU backend,
+then uses `ansible/test-molecule` for deployment, idempotence and reboot through Molecule.
+Goss verifies the installed platform afterward. Keep scenario expectations in
+`tests/proxmox/`, including inventory and the reboot sequence. The scenario consumes
+VM SSH outputs; shared actions own tool setup, bounded execution and reporting.
+Keep short GitHub Script logic inline; use adjacent modules for substantial,
+complex workflow code such as installer input preparation.
 
 `main-ci.yml` and `pull-request-ci.yml` call `shared-ci.yml`. Main supports
 pushes and manual runs; PR CI also supports merge queues. Both cancel superseded
 runs for the same workflow and ref. Start workflows with `permissions: {}` and
 grant only the permissions required by each job. Keep step names descriptive and
-Actions pinned. Compose shared VM operations in the job, and review each job's
+Actions pinned. Shared VM actions own startup, test execution, reporting and
+cleanup for both Lima and direct-QEMU scenarios. Review each job's
 result before merging.
 
-Use Conventional Commits and reviewed pull requests. Pin all three VM actions
-to the same immutable revision in `shared-ci.yml`. Update those references
-together when adopting a shared CI change, then require the hosted VM job to pass
-before merging.
+Use Conventional Commits and reviewed pull requests. When composing the shared
+VM actions, pin creation, testing and destruction to the same immutable revision.
+Require the hosted installation job to pass before merging installer changes.
+`make setup` builds the pinned tooling container for ISO preparation. The shared
+actions install QEMU and the isolated test runtimes. Host-changing assertions must target only the disposable guest.
 
 ## Repository automation
 

@@ -23,7 +23,8 @@ updates:
     schedule:
       interval: weekly
   - package-ecosystem: pip
-    directory: /docker/tooling
+    directories:
+      - /docker/tooling
     groups:
       python-dependencies:
         patterns:
