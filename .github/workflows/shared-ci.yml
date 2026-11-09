@@ -34,7 +34,7 @@ jobs:
       - name: Validate installer inputs
         run: make test-unit TOOLING_IMAGE="$TOOLING_IMAGE"
       - name: Test Ansible
-        uses: hoverkraft-tech/ci-github-iac/actions/ansible/test@89e3bf93adc94b592188e714f61d4abc391aab46 # 1.0.0
+        uses: hoverkraft-tech/ci-github-iac/actions/ansible/test@2c1945afe85bb687c15da83e332b4c52aabae290 # 1.1.0
         with:
           ansible-requirements: docker/tooling/requirements.txt
           ansible-config: ansible/ansible.cfg
@@ -63,13 +63,13 @@ jobs:
         run: make proxmox-download proxmox-iso ANSWER="$E2E_DIRECTORY/answer.toml" OUTPUT="$E2E_DIRECTORY/autoinstall.iso"
       - name: Create disposable installation VM
         id: vm
-        uses: hoverkraft-tech/ci-github-iac/actions/vm/create@89e3bf93adc94b592188e714f61d4abc391aab46 # 1.0.0
+        uses: hoverkraft-tech/ci-github-iac/actions/vm/create@2c1945afe85bb687c15da83e332b4c52aabae290 # 1.1.0
         with:
           backend: qemu
           vm-config: ${{ steps.fixture.outputs.directory }}/vm.json
           startup-timeout-minutes: 20
       - name: Test baseline deployment, idempotence and reboot
-        uses: hoverkraft-tech/ci-github-iac/actions/ansible/test-molecule@89e3bf93adc94b592188e714f61d4abc391aab46 # 1.0.0
+        uses: hoverkraft-tech/ci-github-iac/actions/ansible/test-molecule@2c1945afe85bb687c15da83e332b4c52aabae290 # 1.1.0
         env:
           E2E_DIRECTORY: ${{ github.workspace }}/${{ steps.fixture.outputs.directory }}
           VM_NAME: ${{ steps.vm.outputs.name }}
@@ -80,7 +80,7 @@ jobs:
           ansible-config: ansible/ansible.cfg
           report-name: digital-household - Proxmox baseline
       - name: Verify the installed platform after reboot
-        uses: hoverkraft-tech/ci-github-iac/actions/vm/test@89e3bf93adc94b592188e714f61d4abc391aab46 # 1.0.0
+        uses: hoverkraft-tech/ci-github-iac/actions/vm/test@2c1945afe85bb687c15da83e332b4c52aabae290 # 1.1.0
         with:
           vm: ${{ steps.vm.outputs.vm }}
           goss-file: tests/proxmox/goss.yaml
@@ -88,7 +88,7 @@ jobs:
           report-name: digital-household - Proxmox platform
       - name: Destroy disposable installation VM
         if: ${{ always() && steps.vm.outputs.vm != '' }}
-        uses: hoverkraft-tech/ci-github-iac/actions/vm/destroy@89e3bf93adc94b592188e714f61d4abc391aab46 # 1.0.0
+        uses: hoverkraft-tech/ci-github-iac/actions/vm/destroy@2c1945afe85bb687c15da83e332b4c52aabae290 # 1.1.0
         with:
           vm: ${{ steps.vm.outputs.vm }}
       - name: Remove private installation inputs
