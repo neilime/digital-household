@@ -1,6 +1,9 @@
 version: 2
 updates:
   - package-ecosystem: github-actions
+    commit-message:
+      prefix: "chore"
+      include: "scope"
     directory: /
     groups:
       github-actions-dependencies:
@@ -11,6 +14,9 @@ updates:
     schedule:
       interval: weekly
   - package-ecosystem: docker
+    commit-message:
+      prefix: "chore"
+      include: "scope"
     directories:
       - /
       - /docker/tooling
@@ -23,6 +29,9 @@ updates:
     schedule:
       interval: weekly
   - package-ecosystem: pip
+    commit-message:
+      prefix: "chore"
+      include: "scope"
     directories:
       - /docker/tooling
     groups:
